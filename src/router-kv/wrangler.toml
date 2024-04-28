@@ -1,0 +1,10 @@
+name = "router-kv-worker-rust"
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-03-22"
+
+kv_namespaces = [
+    { binding = "james-eastham-dev", id = "a308c6dff90d4a0dbb8173ad61c637c3" }
+]
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required

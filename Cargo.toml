@@ -1,0 +1,3 @@
+[workspace]
+members = [ "src/axum-postgres", "src/router-kv"]
+resolver = "2"
