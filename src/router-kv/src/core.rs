@@ -27,8 +27,8 @@ impl ToDoRepository {
         }
     }
 
-    pub async fn list(&self, username: String) -> Result<Vec<ToDo>, RepositoryError> {
-        let rows = self.kv.get(&username)
+    pub async fn list(&self, username: &String) -> Result<Vec<ToDo>, RepositoryError> {
+        let rows = self.kv.get(username)
             .json::<Vec<ToDo>>()
             .await
             .unwrap();
@@ -39,10 +39,10 @@ impl ToDoRepository {
         }
     }
 
-    pub async fn add(self, user_name: String, name: String) -> Result<String, RepositoryError> {
+    pub async fn add(self, user_name: &String, name: String) -> Result<String, RepositoryError> {
         let id = Uuid::new_v4().to_string();
 
-        let list_res = self.list(user_name.clone()).await;
+        let list_res = self.list(user_name).await;
 
         let mut current_todos = match list_res {
             Ok(todos) => todos,
@@ -62,29 +62,33 @@ impl ToDoRepository {
         Ok(id.clone())
     }
 
-    // pub async fn get(&self, id: String) -> Result<ToDo, RepositoryError> {
-    //     let row = &self.client.query("SELECT id, name, username FROM todos WHERE id =  $1::TEXT;", &[&id])
-    //         .await
-    //         .map_err(|err| {
-    //             RepositoryError::UnknownError("Unknown failure querying database".to_string())
-    //         })?;
-    //
-    //     let todo = ToDo{
-    //         id: row[0].get("id"),
-    //         name: row[0].get("name"),
-    //         user_name:  row[0].get("username")
-    //     };
-    //
-    //     Ok(todo)
-    // }
-    //
-    // pub async fn delete(&self, id: String) -> Result<(), RepositoryError> {
-    //     &self.client.execute("DELETE FROM todos WHERE id =  $1::TEXT;", &[&id])
-    //         .await
-    //         .map_err(|err| {
-    //             RepositoryError::UnknownError("Unknown failure querying database".to_string())
-    //         })?;
-    //
-    //     Ok(())
-    // }
+    pub async fn get(&self, username: &String, id: String) -> Result<ToDo, RepositoryError> {
+        let user_todos = &self.list(username).await?;
+
+        match user_todos.iter().find(|todo| todo.id == id) {
+            Some(todo) => Ok(ToDo{
+                id: todo.id.clone(),
+                name: todo.name.clone(),
+                user_name: todo.user_name.clone()
+            }),
+            None => Err(RepositoryError::UnknownError("Todo not found".to_string()))
+        }
+    }
+
+    pub async fn delete(&self, username: &String, id: String) -> Result<(), RepositoryError> {
+        let mut user_todos = self.list(username).await?;
+
+        let index = user_todos.iter().position(|todo| todo.id == id);
+        if let Some(index) = index {
+            user_todos.remove(index);
+        } else {
+            return Err(RepositoryError::UnknownError("Todo not found".to_string()));
+        }
+
+        let data = serde_json::to_string(&user_todos).unwrap();
+
+        let _ = &self.kv.put(&username, data).unwrap().execute().await.unwrap();
+
+        Ok(())
+    }
 }
