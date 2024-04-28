@@ -6,7 +6,12 @@ Sample repository playing around with Rust + CloudFlare Workers. Currently, ther
 
 [LINK](./src/axum-postgres/)
 
-An example of using the Axum web framework inside a CloudFlare worker, connecting to a Postgres databases.
+An example of using the Axum web framework inside a CloudFlare worker, connecting to a Postgres databases. To use this example, you will need to set 4 environment variables against your CloudFlare worker:
+
+- DB_HOST
+- DB_NAME
+- DB_USER
+- DB_PASS
 
 ## Router + KV
 
