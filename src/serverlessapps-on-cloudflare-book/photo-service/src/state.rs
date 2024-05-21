@@ -15,6 +15,7 @@ pub struct Image {
 }
 
 impl Image{
+    #[cfg(test)]
     pub fn new(category_id: i32, user_id: i32, image_url: String, title: String, format: String, resolution: String, file_size_bytes: i32) -> Self {
         Self {
             id: -1,

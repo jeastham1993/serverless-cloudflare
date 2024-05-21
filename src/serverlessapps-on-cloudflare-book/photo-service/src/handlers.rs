@@ -1,6 +1,5 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tracing_subscriber::filter;
-use worker::{Request, Response, ResponseBody, ResponseBuilder};
+use serde::{Deserialize, Serialize};
+use worker::{Request, Response};
 
 use crate::state::{Image, ImageStore};
 

@@ -1,9 +1,7 @@
-use std::num::ParseIntError;
 use crate::handlers::{create_image_handler, get_image_handler, SingleImageResponse};
 use handlers::get_images_handler;
-use serde::{Deserialize, Serialize};
 use state::ImageStore;
-use tracing::{info, Level};
+use tracing::{Level};
 use tracing_subscriber::FmtSubscriber;
 use worker::*;
 
@@ -17,7 +15,7 @@ pub struct AppState {
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
-    let subscriber = FmtSubscriber::builder()
+    let _subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
         .with_max_level(Level::TRACE)
@@ -49,7 +47,7 @@ pub async fn get_images(req: Request, ctx: RouteContext<AppState>) -> Result<Res
     Ok(result)
 }
 
-pub async fn get_image(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
+pub async fn get_image(_req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
     let id_param = ctx.param("id").unwrap();
 
     match id_param.parse::<i32>() {
@@ -65,7 +63,7 @@ pub async fn get_image(mut req: Request, ctx: RouteContext<AppState>) -> Result<
     }
 }
 
-pub fn not_found(req: Request, _ctx: RouteContext<AppState>) -> Result<Response> {
+pub fn not_found(_req: Request, _ctx: RouteContext<AppState>) -> Result<Response> {
     let mut req_headers = Headers::new();
     req_headers.set("Content-Type", "application/json")?;
     Ok(ResponseBuilder::new()
