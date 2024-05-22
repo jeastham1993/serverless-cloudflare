@@ -1,7 +1,7 @@
 [workspace]
 
 [package]
-name = "photo-service"
+name = "frontend-functions"
 version = "0.1.0"
 edition = "2021"
 
@@ -17,8 +17,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 tracing = {version="0.1.40", default-features = false}
-tracing-subscriber = {version="0.3", default-features = false, features = ["fmt"]}
-worker = { version="0.3", features = ["d1"] }
+tracing-subscriber = {version="0.3", default-features = false, features = ["fmt", "ansi"] }
+worker = { version="0.3", features = ["http", "d1"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.116"
 console_error_panic_hook = { version = "0.1.1" }
@@ -28,6 +28,7 @@ thiserror = "1.0.59"
 getrandom = {version="0.2.15", features = ["js"]}
 lazy_static = "1.4.0"
 http = "1.1.0"
+reqwest = { version = "0.12.4" , features = ["json"]}
 
 [dependencies.uuid]
 version = "1.8.0"
@@ -38,4 +39,3 @@ features = [
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = "0.12.4"

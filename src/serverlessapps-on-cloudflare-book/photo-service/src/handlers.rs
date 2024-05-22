@@ -1,68 +1,126 @@
 use serde::{Deserialize, Serialize};
-use worker::{Request, Response};
 
 use crate::state::{Image, ImageStore};
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageViewModel {
+    id: i32,
+}
+
+impl From<Image> for ImageViewModel {
+    fn from(value: Image) -> Self {
+        ImageViewModel { id: value.get_id() }
+    }
+}
+
+impl From<&Image> for ImageViewModel {
+    fn from(value: &Image) -> Self {
+        ImageViewModel {
+            id: value.clone().get_id(),
+        }
+    }
+}
+
 #[derive(Deserialize)]
-struct GetImagesQueryParameters {
-    count: usize,
+#[serde(rename_all = "camelCase")]
+pub struct GetImagesRequest {
+    pub count: usize,
 }
 
 #[derive(Serialize)]
-struct GetImageResponse {
-    images: Vec<Image>,
-}
-
-#[derive(Serialize)]
-pub struct SingleImageResponse {
+#[serde(rename_all = "camelCase")]
+pub struct GetImagesResponse {
+    pub images: Option<Vec<ImageViewModel>>,
     pub message: String,
-    pub image: Option<Image>,
 }
 
+pub async fn get_images_handler(
+    request: GetImagesRequest,
+    image_store: &ImageStore,
+) -> Result<GetImagesResponse, GetImagesResponse> {
+    let images = image_store.get_images(request.count).await;
 
-pub async fn get_image_handler(id: i32, image_store: &ImageStore) -> Response {
-    let image = image_store.get_image(id).await;
+    let image_view_models = images.iter().map(ImageViewModel::from).collect();
+
+    Ok(GetImagesResponse{
+        images: Some(image_view_models),
+        message: "OK".to_string()
+    })
+}
+
+pub struct GetImageRequest {
+    pub id: i32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetImageResponse {
+    pub message: String,
+    pub image: Option<ImageViewModel>,
+}
+
+pub async fn get_image_handler(
+    req: GetImageRequest,
+    image_store: &ImageStore,
+) -> Result<GetImageResponse, GetImageResponse> {
+    let image = image_store.get_image(req.id).await;
 
     match image {
-        Ok(img) => Response::from_json(&SingleImageResponse{
-            image: Some(img),
-            message: "OK".to_string()
-        }).unwrap(),
-        Err(_) => Response::from_json(&SingleImageResponse{
+        Ok(img) => Ok(GetImageResponse {
+            image: Some(img.into()),
+            message: "OK".to_string(),
+        }),
+        Err(_) => Err(GetImageResponse {
             image: None,
-            message: "Image not Found".to_string()
-        }).unwrap().with_status(404)
+            message: "Failure retrieving messages".to_string(),
+        }),
     }
 }
 
-pub async fn get_images_handler(request: Request, image_store: &ImageStore) -> Response {
-    let count = request.query::<GetImagesQueryParameters>();
-
-    let count = match count {
-        Ok(count_value) => count_value.count,
-        Err(_) => 100,
-    };
-
-    let images = image_store.get_images(count).await;
-
-    Response::from_json(&GetImageResponse { images }).unwrap()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateImageRequest {
+    category_id: i32,
+    user_id: i32,
+    image_url: String,
+    title: String,
+    format: String,
+    resolution: String,
+    file_size_bytes: i32,
 }
 
-pub async fn create_image_handler(mut request: Request, mut image_store: ImageStore) -> Response {
-    let request_body = request.json().await;
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateImageResponse {
+    pub message: String,
+    pub image: Option<ImageViewModel>,
+}
 
-    let image: Image = match request_body {
-        Ok(body) => body,
-        Err(_) => {
-            return Response::from_json(&SingleImageResponse { image: None, message: "Invalid image in POST body".to_string() }).unwrap().with_status(400)
-        }
-    };
+pub async fn create_image_handler(
+    request: CreateImageRequest,
+    image_store: ImageStore,
+) -> Result<CreateImageResponse, CreateImageResponse> {
+    let image = Image::new(
+        request.category_id,
+        request.user_id,
+        request.image_url,
+        request.title,
+        request.format,
+        request.resolution,
+        request.file_size_bytes,
+    );
 
-    let created_img = image_store.add_image(image.clone()).await;
+    let created_img = image_store.add_image(image).await;
 
     match created_img {
-        Ok(img) => Response::from_json(&SingleImageResponse { image: Some(img), message: "OK".to_string() }).unwrap().with_status(200),
-        Err(_) => return Response::from_json(&SingleImageResponse { image: None, message: "Failure saving image".to_string() }).unwrap().with_status(400)
+        Ok(img) => Ok(CreateImageResponse {
+            image: Some(img.into()),
+            message: "Ok".to_string(),
+        }),
+        Err(_) => Err(CreateImageResponse {
+            image: None,
+            message: "Failure storing data".to_string(),
+        }),
     }
-
 }
