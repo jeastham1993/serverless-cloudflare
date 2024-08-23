@@ -1,3 +1,0 @@
-[workspace]
-members = [ "src/axum-postgres", "src/router-kv", "src/rusty-chatroom/backend"]
-resolver = "2"
