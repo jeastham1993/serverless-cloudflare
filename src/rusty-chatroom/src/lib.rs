@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ::tracing::info;
 use tracing_subscriber::{
     fmt::{format::Pretty, time::UtcTime},
@@ -10,6 +8,7 @@ use worker::*;
 
 mod chatroom;
 mod html;
+mod messaging;
 
 #[event(start)]
 fn start() {

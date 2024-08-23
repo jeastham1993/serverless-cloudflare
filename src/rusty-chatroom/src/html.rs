@@ -30,32 +30,32 @@ $(document).ready(function () {
   updateConnectionStatus();
 
   if (username !== undefined && username !== null) {
-    console.log('Username found in storage');
     document.getElementById("username").value = username;
   }
   else {
-    console.log('Username not found in storage');
     username = "";
   }
 
   if (chatroomId !== undefined && chatroomId !== null) {
-    console.log('ChatroomID found in storage');
     document.getElementById("chatroom_id").value = chatroomId;
   }
   else {
-    console.log('ChatroomID not found in storage');
     chatroomId = "";
   }
 
   if (username.length > 0 && chatroomId.length > 0){
-    console.log('Attempting auto-connect');
     connectWebsockets();
   }
+
+  document.getElementById('message').addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        sendmessage();
+      }
+  });
 });
 
 function connectToChat() {
   if (isConnected){
-    console.log('Closing connection');
     const connectButton = document.getElementById('connectBtn');
     connectButton.innerText = "Disconnecting..."
     const connectionStatusText = document.getElementById("connectionStatus");
@@ -111,6 +111,7 @@ function sendmessage() {
   xhr.onload = () => {
     if (xhr.readyState == 4 && xhr.status == 200) {
       const data = xhr.response;
+      document.getElementById("message").value = '';
     } else {
       console.log(`Error: ${xhr.status}`);
     }
@@ -130,13 +131,17 @@ function updateConnectionStatus() {
   else {
     connectionStatusText.innerText = "Disconnected...";
     connectButton.innerText = "Connect";
+    localStorage.setItem('last_chatroom_id', '');
+    const connectionsOnline = document.getElementById("connectionsOnline");
+    connectionsOnline.innerText = '';
+    const activeUserTest = document.getElementById("activeUsers");
+    activeUserTest.innerText = '';
   }
 }
 
 function connectWebsockets(){
-  ws = new WebSocket(`${ws_root}/connect/${chatroomId}`);
+  ws = new WebSocket(`${ws_root}/connect/${chatroomId}?user_id=${username}`);
   ws.onopen = () => {
-    console.log("ws opened on browser");
     isConnected = true;
     updateConnectionStatus();
     localStorage.setItem('username', username);
@@ -154,8 +159,6 @@ function connectWebsockets(){
 
         const data = xhr.response;
         messages = JSON.parse(data);
-
-        console.log(messages);
 
         messages.forEach((message) => {
           let user = message.user;
@@ -178,39 +181,57 @@ function connectWebsockets(){
 
   ws.onmessage = (message) => {
     const jsonMessageData = JSON.parse(message.data);
-    messages.push(jsonMessageData);
 
-    const messagesDiv = document.getElementById("messages");
-    messagesDiv.innerHTML = "";
+    if (jsonMessageData.message_type === "NewMessage"){
+      messages.push(jsonMessageData.message);
 
-    console.log(messages);
+      const messagesDiv = document.getElementById("messages");
+      messagesDiv.innerHTML = "";
 
-    messages.forEach((message) => {
-      let user = message.user;
+      messages.forEach((message) => {
+        let user = message.user;
 
-      if (user === username) {
-        user = "You";
-      }
+        if (user === username) {
+          user = "You";
+        }
 
-      var element = document.createElement("div");
-      element.appendChild(
-        document.createTextNode(`${user} said: ${message.contents}`)
-      );
-      messagesDiv.appendChild(element);
-    });
+        var element = document.createElement("div");
+        element.appendChild(
+          document.createTextNode(`${user} said: ${message.contents}`)
+        );
+        messagesDiv.appendChild(element);
+      });
+    } else if (jsonMessageData.message_type === "ConnectionUpdate") {
+      const connectionsOnline = document.getElementById("connectionsOnline");
+      connectionsOnline.innerText = `There are ${jsonMessageData.message.connection_count} users online`;
+
+      let onlineUsers = '';
+
+      console.log(jsonMessageData.message.online_users);
+
+      jsonMessageData.message.online_users.forEach((user) => {
+        if (onlineUsers === '') {
+          onlineUsers = user;
+        } else {
+          onlineUsers = `${onlineUsers},${user}`
+         }
+        
+      });
+
+      const activeUserTest = document.getElementById("activeUsers");
+      activeUserTest.innerText = `Active users: ${onlineUsers}`;
+    }
   };
 
   ws.onclose = () => {
-    console.log("Closing connection");
     isConnected = false;
     updateConnectionStatus();
   };
 }
 "#;
 
-js_data.to_string()
+    js_data.to_string()
 }
-
 
 pub fn load_html() -> String {
     let html_data = r#"<!DOCTYPE html>
@@ -241,6 +262,8 @@ pub fn load_html() -> String {
       <hgroup>
         <h1>Rusty Chat</h1>
         <p id="connectionStatus">Disconnected...</p>
+        <p id="connectionsOnline"></p>
+        <p id="activeUsers"></p>
       </hgroup>
     </header>
     <main class="container">

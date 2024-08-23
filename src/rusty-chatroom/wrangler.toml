@@ -6,11 +6,14 @@ logpush = true
 [build]
 command = "cargo install -q worker-build && worker-build --release" # required
 
+
+[[kv_namespaces]]
+binding = "CHAT_HISTORY"
+id = "d5c7f7261fd843a7a306a1e3f4d440ce"
+
 [durable_objects]
-bindings = [
-    { name = "CHATROOM", class_name = "Chatroom" }
-]
+bindings = [{ name = "CHATROOM", class_name = "Chatroom" }]
 
 [[migrations]]
-tag = "v1" # Should be unique for each entry
+tag = "v1"                 # Should be unique for each entry
 new_classes = ["Chatroom"] # Array of new classes
