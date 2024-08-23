@@ -1,0 +1,11 @@
+.message-window{
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.messages{
+    height: 60vh;
+    overflow-x: scroll;
+}

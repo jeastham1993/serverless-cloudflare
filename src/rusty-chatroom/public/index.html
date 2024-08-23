@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Rusty Chat</title>
+    <meta name="description" content="A chat app built with Rust and Cloudflare." />
+
+    <!-- Pico.css -->
+    <link
+      rel='stylesheet'
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
+    />
+    <link
+        rel="stylesheet"
+        href="style.css"
+    />
+  </head>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="app.js"></script>
+  </head>
+  <body>
+    <header class="container">
+      <hgroup>
+        <h1>Rusty Chat</h1>
+        <p id="connectionStatus">Disconnected...</p>
+      </hgroup>
+    </header>
+    <main class="container">
+        <div class="grid">
+          <input id="chatroom_id" type="text"
+            name="chatroom_id"
+            placeholder="ChatroomID"
+            aria-label="ChatroomID"
+            required/>
+            <input id="username" type="text"
+            name="username"
+            placeholder="User name"
+            aria-label="User name"
+            required/>
+            <button id="connectBtn" onclick="connectToChat()">Connect</button>
+        </div>
+        <div class="messages" id="messages">
+
+        </div>
+        <div class="grid message-window">
+            <input id="message" 
+                type="text"
+                name="message"
+                placeholder="Message"
+                aria-label="Message"
+                required/>
+            <button onclick="sendmessage()">Send</button>
+        </div>
+    </main>
+  </body>
+</html>

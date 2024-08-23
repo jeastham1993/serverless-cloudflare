@@ -1,0 +1,16 @@
+name = "rusty-chatroom"
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-03-22"
+logpush = true
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required
+
+[durable_objects]
+bindings = [
+    { name = "CHATROOM", class_name = "Chatroom" }
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["Chatroom"] # Array of new classes
