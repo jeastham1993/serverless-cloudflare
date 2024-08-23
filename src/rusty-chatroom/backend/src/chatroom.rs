@@ -20,12 +20,11 @@ struct WebsocketConnectionAttachements {
 }
 
 #[durable_object]
-pub struct Chatroom<T> {
+pub struct Chatroom {
     state: State,
     env: Env,
     connected_users: i32,
     user_names: Vec<String>,
-    message_repository: T
 }
 
 #[durable_object]
@@ -46,7 +45,7 @@ impl DurableObject for Chatroom {
 
         let paths = paths.collect::<Box<[_]>>();
 
-        if paths.first() == Some(&"message") {
+        if paths.contains(&"message") {
             match req.method() {
                 worker::Method::Get => self.load_message_history(req).await,
                 worker::Method::Post => self.new_message(req).await,
@@ -54,7 +53,7 @@ impl DurableObject for Chatroom {
                     .with_status(404)
                     .body(worker::ResponseBody::Empty)),
             }
-        } else if paths.first() == Some(&"connect") {
+        } else if paths.contains(&"connect") {
             let user_id_query_param = req.query::<QueryStringParameters>().map_err(|e| {
                 worker::Error::RustError("Failure parsing query parameters".to_string())
             })?;
@@ -98,6 +97,8 @@ impl DurableObject for Chatroom {
         let _ = &self
             .update_connection_count(UpdateConnectionCountTypes::Decrease, user_id)
             .await?;
+
+        info!("Websocket close success");
 
         Ok(())
     }

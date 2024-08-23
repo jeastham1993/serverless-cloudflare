@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Rusty Chat</title>
+    <meta name="description" content="A chat app built with Rust and Cloudflare." />
+
+    <!-- Pico.css -->
+    <link
+      rel='stylesheet'
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
+    />
+    <link
+        rel="stylesheet"
+        href="/style.css"
+    />
+  </head>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="/chats.js"></script>
+  </head>
+  <body>
+    <header class="container">
+      <hgroup>
+        <h1>Rusty Chat</h1>
+      </hgroup>
+    </header>
+    <main class="container">
+      <div class="grid">
+        <input id="chat_name" type="text"
+          name="chat_name"
+          placeholder="Chat Name"
+          aria-label="Chat Name"
+          required/>
+          <input id="chat_password" type="text"
+            name="chat_password"
+            placeholder="Chat Password"
+            aria-label="Chat Password"
+            required/>
+          <button id="createChatBtn" onclick="createChat()">Create New Chat</button>
+      </div>
+      <div>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            
+          </tbody>
+        </table>
+      </div>
+  </main>
+  </body>
+</html>

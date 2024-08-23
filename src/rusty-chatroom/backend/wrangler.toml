@@ -1,0 +1,24 @@
+name = "rusty-chatroom"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-04-05"
+logpush = true
+workers_dev = false
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required
+
+[[d1_databases]]
+binding = "CHAT_METADATA"
+database_id = "9c6c6448-acd1-4ee8-a68a-2b9330be621f"
+database_name = "rusty-serverless-chat-metadata"
+
+[[kv_namespaces]]
+binding = "CHAT_HISTORY"
+id = "d5c7f7261fd843a7a306a1e3f4d440ce"
+
+[durable_objects]
+bindings = [{ name = "CHATROOM", class_name = "Chatroom" }]
+
+[[migrations]]
+tag = "v1"                 # Should be unique for each entry
+new_classes = ["Chatroom"] # Array of new classes

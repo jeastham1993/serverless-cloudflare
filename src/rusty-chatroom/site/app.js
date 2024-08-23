@@ -1,23 +1,4 @@
-pub fn load_css() -> String {
-    let css_data = r#"
-        .message-window{
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-}
-
-.messages{
-    height: 60vh;
-    overflow-x: scroll;
-}"#;
-
-    css_data.to_string()
-}
-
-pub fn load_js() -> String {
-    let js_data = r#"
-        let isConnected = false;
+let isConnected = false;
 let username = localStorage.getItem("username");
 let chatroomId = localStorage.getItem("last_chatroom_id");
 let api_root = "";
@@ -27,7 +8,6 @@ let ws = undefined;
 
 $(document).ready(function () {
   isConnected = false;
-  updateConnectionStatus();
 
   if (username !== undefined && username !== null) {
     document.getElementById("username").value = username;
@@ -36,15 +16,8 @@ $(document).ready(function () {
     username = "";
   }
 
-  if (chatroomId !== undefined && chatroomId !== null) {
-    document.getElementById("chatroom_id").value = chatroomId;
-  }
-  else {
-    chatroomId = "";
-  }
-
-  if (username.length > 0 && chatroomId.length > 0){
-    connectWebsockets();
+  if (chatroomId === undefined || chatroomId === null || chatroomId.length <= 0) {
+    window.location = '/chats';
   }
 
   document.getElementById('message').addEventListener('keydown', function(event) {
@@ -61,28 +34,26 @@ function connectToChat() {
     const connectionStatusText = document.getElementById("connectionStatus");
     connectionStatusText.innerText = "Disconnecting";
 
-    ws.close();
-    document.getElementById("chatroom_id").value = "";
+    ws.close(1000);
     return;
   }
 
   const userNameInputValue = document.getElementById("username").value;
-  const chatroomIdInputValue = document.getElementById("chatroom_id").value;
+  const passwordInputValue = document.getElementById("password").value;
 
   if (userNameInputValue.length <= 0) {
     alert("User name must not be empty.");
     return;
   }
 
-  if (chatroomIdInputValue.length <= 0) {
-    alert("Chatroom ID must not be empty.");
+  if (passwordInputValue.length <= 0) {
+    alert("Password must not be empty");
     return;
   }
 
   username = userNameInputValue;
-  chatroomId = chatroomIdInputValue;
 
-  connectWebsockets();
+  connectWebsockets(passwordInputValue);
 }
 
 function sendmessage() {
@@ -100,7 +71,7 @@ function sendmessage() {
   }
 
   var xhr = new XMLHttpRequest();
-  xhr.open("POST", `${api_root}/message/${chatroomId}`, true);
+  xhr.open("POST", `${api_root}/api/message/${chatroomId}`, true);
   xhr.setRequestHeader("Content-Type", "application/json");
   xhr.send(
     JSON.stringify({
@@ -129,18 +100,12 @@ function updateConnectionStatus() {
     connectButton.innerText = "Disconnect";
   }
   else {
-    connectionStatusText.innerText = "Disconnected...";
-    connectButton.innerText = "Connect";
-    localStorage.setItem('last_chatroom_id', '');
-    const connectionsOnline = document.getElementById("connectionsOnline");
-    connectionsOnline.innerText = '';
-    const activeUserTest = document.getElementById("activeUsers");
-    activeUserTest.innerText = '';
+    window.location ='/chats';
   }
 }
 
-function connectWebsockets(){
-  ws = new WebSocket(`${ws_root}/connect/${chatroomId}?user_id=${username}`);
+function connectWebsockets(password){
+  ws = new WebSocket(`${ws_root}/api/connect/${chatroomId}?user_id=${username}&password=${password}`);
   ws.onopen = () => {
     isConnected = true;
     updateConnectionStatus();
@@ -148,7 +113,7 @@ function connectWebsockets(){
     localStorage.setItem('last_chatroom_id', chatroomId);
 
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", `${api_root}/message/${chatroomId}`, true);
+    xhr.open("GET", `${api_root}/api/message/${chatroomId}`, true);
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.send();
 
@@ -169,7 +134,7 @@ function connectWebsockets(){
 
           var element = document.createElement("div");
           element.appendChild(
-            document.createTextNode(`${user} said: ${message.contents}`)
+            document.createTextNode(`${user}: ${message.contents}`)
           );
           messagesDiv.appendChild(element);
         });
@@ -197,7 +162,7 @@ function connectWebsockets(){
 
         var element = document.createElement("div");
         element.appendChild(
-          document.createTextNode(`${user} said: ${message.contents}`)
+          document.createTextNode(`${user}: ${message.contents}`)
         );
         messagesDiv.appendChild(element);
       });
@@ -223,79 +188,14 @@ function connectWebsockets(){
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    console.log(e);
+
     isConnected = false;
     updateConnectionStatus();
   };
-}
-"#;
 
-    js_data.to_string()
-}
-
-pub fn load_html() -> String {
-    let html_data = r#"<!DOCTYPE html>
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
-    <title>Rusty Chat</title>
-    <meta name="description" content="A chat app built with Rust and Cloudflare." />
-
-    <!-- Pico.css -->
-    <link
-      rel='stylesheet'
-      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
-    />
-    <link
-        rel="stylesheet"
-        href="style.css"
-    />
-  </head>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="app.js"></script>
-  </head>
-  <body>
-    <header class="container">
-      <hgroup>
-        <h1>Rusty Chat</h1>
-        <p id="connectionStatus">Disconnected...</p>
-        <p id="connectionsOnline"></p>
-        <p id="activeUsers"></p>
-      </hgroup>
-    </header>
-    <main class="container">
-        <div class="grid">
-          <input id="chatroom_id" type="text"
-            name="chatroom_id"
-            placeholder="ChatroomID"
-            aria-label="ChatroomID"
-            required/>
-            <input id="username" type="text"
-            name="username"
-            placeholder="User name"
-            aria-label="User name"
-            required/>
-            <button id="connectBtn" onclick="connectToChat()">Connect</button>
-        </div>
-        <div class="messages" id="messages">
-
-        </div>
-        <div class="grid message-window">
-            <input id="message" 
-                type="text"
-                name="message"
-                placeholder="Message"
-                aria-label="Message"
-                required/>
-            <button onclick="sendmessage()">Send</button>
-        </div>
-    </main>
-  </body>
-</html>
-"#;
-
-    html_data.to_string()
+  ws.onerror = (e) => {
+    console.log(e);
+  }
 }

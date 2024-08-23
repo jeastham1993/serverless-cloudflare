@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -26,19 +25,22 @@
       <hgroup>
         <h1>Rusty Chat</h1>
         <p id="connectionStatus">Disconnected...</p>
+        <p id="connectionsOnline"></p>
+        <p id="activeUsers"></p>
       </hgroup>
     </header>
     <main class="container">
         <div class="grid">
-          <input id="chatroom_id" type="text"
-            name="chatroom_id"
-            placeholder="ChatroomID"
-            aria-label="ChatroomID"
-            required/>
             <input id="username" type="text"
             name="username"
             placeholder="User name"
             aria-label="User name"
+            required/>
+            <input id="password" type="text"
+            name="password"
+            placeholder="Password"
+            aria-label="Password"
+            type="password"
             required/>
             <button id="connectBtn" onclick="connectToChat()">Connect</button>
         </div>
