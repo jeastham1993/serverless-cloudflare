@@ -4,6 +4,17 @@
 
 Sample application demonstrating using Rust alongside the full suite of Cloudflare serverless technologies.
 
+## Usage
+
+The front-end application exposes two pages:
+
+- `/`: The chatroom interface
+- `/chats`: Create new chats, join existing chats
+
+All chats are password protected. Chat metadata (name, password etc) are stored in a D1 database.
+
+Once you have created a chat, you will be redirected to the `/` interface. The relevant `chat_id` is set in your browser local storage. Enter a username, and the correct password, and you will be connected to the chat. Perform this action in multiple different browser windows to use the chat.
+
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install)
