@@ -1,5 +1,7 @@
 # Rusty Chatroom on Cloudflare
 
+![sample](./assets/chat-in-action.gif)
+
 Sample application demonstrating using Rust alongside the full suite of Cloudflare serverless technologies.
 
 ## Prerequisites
