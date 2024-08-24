@@ -246,17 +246,34 @@ impl Chatroom {
     }
 
     async fn load_messages(&mut self) -> Result<Vec<Message>> {
-        let stored_messages: &Vec<Message> = &self
+        let stored_messages = &self
             .state
             .storage()
-            .get(&self.messages_storage_key)
-            .await
-            .map_err(|e| {
-                warn!("{}", e);
-                worker::Error::RustError("Failure loading key for chatroom from store".to_string())
-            })?;
+            .get::<Vec<Message>>(&self.messages_storage_key)
+            .await;
 
-        Ok(stored_messages.clone())
+        if stored_messages.is_err() {
+            let err = stored_messages.as_ref().err().unwrap();
+            warn!("{}", err);
+            
+            let messages: Vec<Message> = vec![];
+
+            self.state
+                .storage()
+                .put(&self.messages_storage_key, &messages)
+                .await
+                .map_err(|e| {
+                    warn!("{}", e);
+                    worker::Error::RustError(
+                        "Failuring updating messages in DO storage".to_string(),
+                    )
+                })?;
+            return Ok(messages);
+        }
+
+        info!("Stored message count {}", stored_messages.as_ref().unwrap().len());
+
+        Ok(stored_messages.as_ref().unwrap().clone())
     }
 
     async fn update_connection_count(

@@ -139,7 +139,7 @@ function connectWebsockets() {
         handleChatroomEndedMessage();
         break;
       case "MessageHistory":
-        handleMessageHistoryMessage();
+        handleMessageHistoryMessage(jsonMessageData);
         break;
     }
   };
@@ -166,9 +166,6 @@ function disconnectWebsockets() {
 
 function handleNewMessage(jsonMessageData) {
   messages.push(jsonMessageData.message);
-
-  const messagesDiv = document.getElementById("messages");
-  messagesDiv.innerHTML = "";
 
   refreshMessages();
 }
@@ -203,9 +200,7 @@ function handleChatroomEndedMessage() {
 }
 
 function handleMessageHistoryMessage(jsonMessageData) {
-  const messagesDiv = document.getElementById("messages");
-  messagesDiv.innerHTML = "";
-
+  console.log(jsonMessageData);
   if (jsonMessageData === undefined) {
     return;
   }
@@ -216,6 +211,9 @@ function handleMessageHistoryMessage(jsonMessageData) {
 }
 
 function refreshMessages() {
+  const messagesDiv = document.getElementById("messages");
+  messagesDiv.innerHTML = "";
+
   messages.forEach((message) => {
     let user = message.user;
 

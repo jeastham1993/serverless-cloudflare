@@ -9,7 +9,7 @@ command = "cargo install -q worker-build && worker-build --release" # required
 
 [[d1_databases]]
 binding = "CHAT_METADATA"
-database_id = "9c6c6448-acd1-4ee8-a68a-2b9330be621f"
+database_id = "b7768eb5-b49b-4a4d-9a21-6001222660a5"
 database_name = "rusty-serverless-chat-metadata"
 
 # [[kv_namespaces]]
