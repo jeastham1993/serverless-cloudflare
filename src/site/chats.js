@@ -33,7 +33,7 @@ function createChat() {
 
       const data = JSON.parse(xhr.response);
 
-      localStorage.setItem("last_chatroom_id", data.id);
+      localStorage.setItem("chatroom_id", data.id);
 
       window.location = '/';
     } else {
@@ -43,7 +43,7 @@ function createChat() {
 }
 
 function joinChat(chat_id) {
-  localStorage.setItem("last_chatroom_id", chat_id);
+  localStorage.setItem("chatroom_id", chat_id);
 
   window.location = '/';
 }

@@ -194,6 +194,10 @@ function handleConnectionUpdateMessage(jsonMessageData) {
   console.log(jsonMessageData.message.online_users);
 
   jsonMessageData.message.online_users.forEach((user) => {
+    if (user === username){
+      user = "You";
+    }
+    
     if (onlineUsers === "") {
       onlineUsers = user;
     } else {
@@ -213,6 +217,10 @@ function handleChatroomEndedMessage() {
 function handleMessageHistoryMessage(jsonMessageData) {
   const messagesDiv = document.getElementById("messages");
   messagesDiv.innerHTML = "";
+
+  if (jsonMessageData === undefined){
+    return;
+  }
 
   messages = jsonMessageData.message.history;
 
