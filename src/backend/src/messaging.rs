@@ -2,9 +2,13 @@ use std::fmt::{Display, Formatter, Result};
 
 use serde::{Deserialize, Serialize};
 
+use crate::{chatroom::Chatroom, chats::Chat};
+
 #[derive(Debug)]
 pub enum MessageTypes {
     NewMessage,
+    MessageHistory,
+    ChatroomEnded,
     ConnectionUpdate,
 }
 
@@ -14,9 +18,14 @@ impl Display for MessageTypes {
     }
 }
 
+#[derive(Deserialize)]
+pub struct IncomingMessageType {
+    pub message_type: String
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct MessageWrapper<T> {
-    message: T,
+    pub message: T,
     message_type: String,
 }
 
@@ -36,6 +45,19 @@ pub struct Message {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+pub struct ChatroomEnded {
+    chat_id: String
+}
+
+impl ChatroomEnded {
+    pub fn new(chat_id: String) -> Self {
+        ChatroomEnded{
+            chat_id
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
 pub struct ConnectionUpdate {
     connection_count: i32,
     online_users: Vec<String>
@@ -46,6 +68,19 @@ impl ConnectionUpdate{
         ConnectionUpdate{
             connection_count,
             online_users
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct MessageHistory {
+    history: Vec<Message>
+}
+
+impl MessageHistory {
+    pub fn new(history: Vec<Message>) -> Self {
+        MessageHistory {
+            history
         }
     }
 }

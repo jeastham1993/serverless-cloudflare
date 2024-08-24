@@ -116,6 +116,23 @@ WHERE c.id = ?1",
         }
     }
 
+    pub async fn delete_chat(&self, chat_id: &String) -> Result<(), ()> {
+        let _ = &self
+            .database
+            .prepare(
+                "DELETE FROM chats
+WHERE id = ?1",
+            )
+            .bind(&[
+                JsValue::from(chat_id),
+            ])
+            .unwrap()
+            .run()
+            .await;
+
+        Ok(())
+    }
+
     pub async fn add_chat(&self, chat: Chat) -> Result<Chat, ()> {
         let insert_result = &self
             .database

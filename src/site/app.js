@@ -1,6 +1,8 @@
+const usernameLocalStorageKey = "username";
+const chatRoomIdLocalStorageKey = "chatroom_id";
 let isConnected = false;
-let username = localStorage.getItem("username");
-let chatroomId = localStorage.getItem("last_chatroom_id");
+let username = localStorage.getItem(usernameLocalStorageKey);
+let chatroomId = localStorage.getItem(chatRoomIdLocalStorageKey);
 let api_root = "";
 let ws_root = "";
 let messages = [];
@@ -11,33 +13,92 @@ $(document).ready(function () {
 
   if (username !== undefined && username !== null) {
     document.getElementById("username").value = username;
-  }
-  else {
+  } else {
     username = "";
   }
 
-  if (chatroomId === undefined || chatroomId === null || chatroomId.length <= 0) {
-    window.location = '/chats';
+  checkForChatIdQueryParam();
+
+  if (
+    chatroomId === undefined ||
+    chatroomId === null ||
+    chatroomId.length <= 0
+  ) {
+    window.location = "/chats";
   }
 
-  document.getElementById('message').addEventListener('keydown', function(event) {
-      if (event.key === 'Enter') {
+  document
+    .getElementById("message")
+    .addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
         sendmessage();
       }
-  });
+    });
 });
 
-function connectToChat() {
-  if (isConnected){
-    const connectButton = document.getElementById('connectBtn');
-    connectButton.innerText = "Disconnecting..."
-    const connectionStatusText = document.getElementById("connectionStatus");
-    connectionStatusText.innerText = "Disconnecting";
+function checkForChatIdQueryParam() {
+  const chatUrlParameters = new URLSearchParams(window.location.search);
+  const chatIdParam = chatUrlParameters.get("chat_id");
 
-    ws.close(1000);
+  if (
+    chatIdParam !== undefined &&
+    chatIdParam !== null &&
+    chatIdParam.length > 0
+  ) {
+    console.log('setting item');
+    localStorage.setItem(chatRoomIdLocalStorageKey, chatIdParam);
+    window.location = "/";
+  }
+}
+
+function connectBtnClick() {
+  if (isConnected) {
+    disconnectWebsockets();
+  } else {
+    connectWebsockets();
+  }
+}
+
+function sendmessage() {
+  if (!isConnected) {
+    alert("Please connect first");
     return;
   }
 
+  let messageContents = document.getElementById("message").value;
+
+  if (messageContents.length <= 0) {
+    alert("Message must not be empty");
+    return;
+  }
+
+  const data = {
+    message: {
+      user: username,
+      contents: messageContents,
+    },
+    message_type: "NewMessage",
+  };
+
+  ws.send(JSON.stringify(data));
+  document.getElementById("message").value = "";
+}
+
+function updateConnectionStatus() {
+  const connectionStatusText = document.getElementById("connectionStatus");
+  const connectButton = document.getElementById("connectBtn");
+  connectionStatusText.innerText = "";
+  connectButton.innerText = "";
+
+  if (isConnected) {
+    connectionStatusText.innerText = "Connected!";
+    connectButton.innerText = "Disconnect";
+  } else {
+    window.location = "/chats";
+  }
+}
+
+function connectWebsockets() {
   const userNameInputValue = document.getElementById("username").value;
   const passwordInputValue = document.getElementById("password").value;
 
@@ -53,149 +114,119 @@ function connectToChat() {
 
   username = userNameInputValue;
 
-  connectWebsockets(passwordInputValue);
-}
-
-function sendmessage() {
-  if (!isConnected) {
-    alert("Please connect first");
-
-    return;
-  }
-
-  let messageContents = document.getElementById("message").value;
-
-  if (messageContents.length <= 0) {
-    alert("Message must not be empty");
-    return;
-  }
-
-  var xhr = new XMLHttpRequest();
-  xhr.open("POST", `${api_root}/api/message/${chatroomId}`, true);
-  xhr.setRequestHeader("Content-Type", "application/json");
-  xhr.send(
-    JSON.stringify({
-      user: username,
-      contents: messageContents,
-    })
+  //TODO: Update password to use 'tickets' instead.
+  ws = new WebSocket(
+    `${ws_root}/api/connect/${chatroomId}?user_id=${username}&password=${passwordInputValue}`
   );
-  xhr.onload = () => {
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      const data = xhr.response;
-      document.getElementById("message").value = '';
-    } else {
-      console.log(`Error: ${xhr.status}`);
-    }
-  };
-}
 
-function updateConnectionStatus() {
-  const connectionStatusText = document.getElementById("connectionStatus");
-  const connectButton = document.getElementById('connectBtn');
-  connectionStatusText.innerText = "";
-  connectButton.innerText = "";
-
-  if (isConnected) {
-    connectionStatusText.innerText = "Connected!";
-    connectButton.innerText = "Disconnect";
-  }
-  else {
-    window.location ='/chats';
-  }
-}
-
-function connectWebsockets(password){
-  ws = new WebSocket(`${ws_root}/api/connect/${chatroomId}?user_id=${username}&password=${password}`);
   ws.onopen = () => {
     isConnected = true;
     updateConnectionStatus();
-    localStorage.setItem('username', username);
-    localStorage.setItem('last_chatroom_id', chatroomId);
-
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", `${api_root}/api/message/${chatroomId}`, true);
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.send();
-
-    xhr.onload = () => {
-      if (xhr.readyState == 4 && xhr.status == 200) {
-        const messagesDiv = document.getElementById("messages");
-        messagesDiv.innerHTML = "";
-
-        const data = xhr.response;
-        messages = JSON.parse(data);
-
-        messages.forEach((message) => {
-          let user = message.user;
-
-          if (user === username) {
-            user = "You";
-          }
-
-          var element = document.createElement("div");
-          element.appendChild(
-            document.createTextNode(`${user}: ${message.contents}`)
-          );
-          messagesDiv.appendChild(element);
-        });
-      } else {
-        console.log(`Error: ${xhr.status}`);
-      }
-    };
+    localStorage.setItem(usernameLocalStorageKey, username);
+    localStorage.setItem(chatRoomIdLocalStorageKey, chatroomId);
   };
 
   ws.onmessage = (message) => {
     const jsonMessageData = JSON.parse(message.data);
-
-    if (jsonMessageData.message_type === "NewMessage"){
-      messages.push(jsonMessageData.message);
-
-      const messagesDiv = document.getElementById("messages");
-      messagesDiv.innerHTML = "";
-
-      messages.forEach((message) => {
-        let user = message.user;
-
-        if (user === username) {
-          user = "You";
-        }
-
-        var element = document.createElement("div");
-        element.appendChild(
-          document.createTextNode(`${user}: ${message.contents}`)
-        );
-        messagesDiv.appendChild(element);
-      });
-    } else if (jsonMessageData.message_type === "ConnectionUpdate") {
-      const connectionsOnline = document.getElementById("connectionsOnline");
-      connectionsOnline.innerText = `There are ${jsonMessageData.message.connection_count} users online`;
-
-      let onlineUsers = '';
-
-      console.log(jsonMessageData.message.online_users);
-
-      jsonMessageData.message.online_users.forEach((user) => {
-        if (onlineUsers === '') {
-          onlineUsers = user;
-        } else {
-          onlineUsers = `${onlineUsers},${user}`
-         }
-        
-      });
-
-      const activeUserTest = document.getElementById("activeUsers");
-      activeUserTest.innerText = `Active users: ${onlineUsers}`;
+    switch (jsonMessageData.message_type) {
+      case "NewMessage":
+        handleNewMessage(jsonMessageData);
+        break;
+      case "ConnectionUpdate":
+        handleConnectionUpdateMessage(jsonMessageData);
+        break;
+      case "ChatroomEnded":
+        handleChatroomEndedMessage();
+        break;
+      case "MessageHistory":
+        handleMessageHistoryMessage();
+        break;
     }
   };
 
   ws.onclose = (e) => {
-    console.log(e);
-
     isConnected = false;
     updateConnectionStatus();
   };
 
   ws.onerror = (e) => {
     console.log(e);
-  }
+  };
+}
+
+function disconnectWebsockets() {
+  const connectButton = document.getElementById("connectBtn");
+  connectButton.innerText = "Disconnecting...";
+  const connectionStatusText = document.getElementById("connectionStatus");
+  connectionStatusText.innerText = "Disconnecting";
+
+  ws.close(1000);
+  return;
+}
+
+function handleNewMessage(jsonMessageData) {
+  messages.push(jsonMessageData.message);
+
+  const messagesDiv = document.getElementById("messages");
+  messagesDiv.innerHTML = "";
+
+  messages.forEach((message) => {
+    let user = message.user;
+
+    if (user === username) {
+      user = "You";
+    }
+
+    var element = document.createElement("div");
+    element.appendChild(
+      document.createTextNode(`${user}: ${message.contents}`)
+    );
+    messagesDiv.appendChild(element);
+  });
+}
+
+function handleConnectionUpdateMessage(jsonMessageData) {
+  const connectionsOnline = document.getElementById("connectionsOnline");
+  connectionsOnline.innerText = `There are ${jsonMessageData.message.connection_count} users online`;
+
+  let onlineUsers = "";
+
+  console.log(jsonMessageData.message.online_users);
+
+  jsonMessageData.message.online_users.forEach((user) => {
+    if (onlineUsers === "") {
+      onlineUsers = user;
+    } else {
+      onlineUsers = `${onlineUsers},${user}`;
+    }
+  });
+
+  const activeUserTest = document.getElementById("activeUsers");
+  activeUserTest.innerText = `Active users: ${onlineUsers}`;
+}
+
+function handleChatroomEndedMessage() {
+  alert("Unfortunately, this chatroom has ended. Thankyou for chatting");
+  window.location = "/chats";
+}
+
+function handleMessageHistoryMessage(jsonMessageData) {
+  const messagesDiv = document.getElementById("messages");
+  messagesDiv.innerHTML = "";
+
+  messages = jsonMessageData.message.history;
+
+  messages.forEach((message) => {
+    let user = message.user;
+
+    if (user === username) {
+      user = "You";
+    }
+
+    var element = document.createElement("div");
+    element.appendChild(
+      document.createTextNode(`${user}: ${message.contents}`)
+    );
+    messagesDiv.appendChild(element);
+  });
 }
