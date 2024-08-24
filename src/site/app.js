@@ -45,7 +45,7 @@ function checkForChatIdQueryParam() {
     chatIdParam !== null &&
     chatIdParam.length > 0
   ) {
-    console.log('setting item');
+    console.log("setting item");
     localStorage.setItem(chatRoomIdLocalStorageKey, chatIdParam);
     window.location = "/";
   }
@@ -170,19 +170,7 @@ function handleNewMessage(jsonMessageData) {
   const messagesDiv = document.getElementById("messages");
   messagesDiv.innerHTML = "";
 
-  messages.forEach((message) => {
-    let user = message.user;
-
-    if (user === username) {
-      user = "You";
-    }
-
-    var element = document.createElement("div");
-    element.appendChild(
-      document.createTextNode(`${user}: ${message.contents}`)
-    );
-    messagesDiv.appendChild(element);
-  });
+  refreshMessages();
 }
 
 function handleConnectionUpdateMessage(jsonMessageData) {
@@ -194,10 +182,10 @@ function handleConnectionUpdateMessage(jsonMessageData) {
   console.log(jsonMessageData.message.online_users);
 
   jsonMessageData.message.online_users.forEach((user) => {
-    if (user === username){
+    if (user === username) {
       user = "You";
     }
-    
+
     if (onlineUsers === "") {
       onlineUsers = user;
     } else {
@@ -218,12 +206,16 @@ function handleMessageHistoryMessage(jsonMessageData) {
   const messagesDiv = document.getElementById("messages");
   messagesDiv.innerHTML = "";
 
-  if (jsonMessageData === undefined){
+  if (jsonMessageData === undefined) {
     return;
   }
 
   messages = jsonMessageData.message.history;
 
+  refreshMessages();
+}
+
+function refreshMessages() {
   messages.forEach((message) => {
     let user = message.user;
 
