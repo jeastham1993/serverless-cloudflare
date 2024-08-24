@@ -2,7 +2,6 @@ use std::fmt::{Display, Formatter, Result};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{chatroom::Chatroom, chats::Chat};
 
 #[derive(Debug)]
 pub enum MessageTypes {
@@ -32,7 +31,7 @@ pub struct MessageWrapper<T> {
 impl<T> MessageWrapper<T> {
     pub fn new(message_type: MessageTypes, message: T) -> Self {
         MessageWrapper {
-            message: message,
+            message,
             message_type: message_type.to_string(),
         }
     }

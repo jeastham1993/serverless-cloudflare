@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tracing::info;
 use worker::{
     durable_object, Env, Request, Response, Result, State, WebSocket, WebSocketIncomingMessage,
@@ -35,15 +34,15 @@ impl DurableObject for Chatroom {
     fn new(state: State, env: Env) -> Self {
         let database = env.d1("CHAT_METADATA").unwrap();
 
-        let durable_object = Self {
-            state: state,
+        
+
+        Self {
+            state,
             env,
             connected_users: 0,
             user_names: vec![],
             chat_repository: ChatRepository::new(database),
-        };
-
-        durable_object
+        }
     }
 
     async fn fetch(&mut self, req: Request) -> Result<Response> {
@@ -67,7 +66,7 @@ impl DurableObject for Chatroom {
         info!("Alarm triggered");
 
         let chat_id = self.state.storage().get("chat_id").await.map_err(|e| {
-            return worker::Error::RustError("Failure retrieving chat id".to_string());
+            worker::Error::RustError("Failure retrieving chat id".to_string())
         })?;
 
         info!("Retrieved {}", chat_id);
@@ -95,13 +94,10 @@ impl DurableObject for Chatroom {
             WebSocketIncomingMessage::String(str_data) => {
                 let incoming_message: IncomingMessageType = serde_json::from_str(&str_data).unwrap();
 
-                match incoming_message.message_type.as_str() {
-                    "NewMessage" => {
-                        let wrapper: MessageWrapper<Message> = serde_json::from_str(&str_data).unwrap();
+                if incoming_message.message_type.as_str() == "NewMessage" {
+                    let wrapper: MessageWrapper<Message> = serde_json::from_str(&str_data).unwrap();
 
-                        let _ = &self.new_message(wrapper.message).await;
-                    }
-                    _ => ()
+                    let _ = &self.new_message(wrapper.message).await;
                 }
             }
             WebSocketIncomingMessage::Binary(_) => {
@@ -124,7 +120,7 @@ impl DurableObject for Chatroom {
         let connection_attachments = ws
             .deserialize_attachment::<WebsocketConnectionAttachements>()
             .map_err(|e| {
-                return worker::Error::RustError("Failure parsing attachemtns".to_string());
+                worker::Error::RustError("Failure parsing attachemtns".to_string())
             })?;
 
         let user_id = match connection_attachments {
@@ -143,7 +139,7 @@ impl DurableObject for Chatroom {
 }
 
 impl Chatroom {
-    async fn handle_connect(&mut self, mut req: Request, paths: Box<[&str]>) -> Result<Response> {
+    async fn handle_connect(&mut self, req: Request, paths: Box<[&str]>) -> Result<Response> {
         if let chat_id = paths[2] {
             info!("Storing chatId {}", chat_id);
             self.state.storage().put("chat_id", chat_id).await;
@@ -173,10 +169,10 @@ impl Chatroom {
             )
             .await?;
 
-        Ok(Response::from_websocket(client)?)
+        Response::from_websocket(client)
     }
     
-    async fn new_message(&mut self, mut message: Message) -> Result<Response> {
+    async fn new_message(&mut self, message: Message) -> Result<Response> {
         let mut messages = self.load_messages().await?;
 
         messages.push(message.clone());
@@ -214,10 +210,7 @@ impl Chatroom {
                 worker::Error::RustError("Failure loading key for chatroom from store".to_string())
             })?;
 
-        let messages = match stored_messages {
-            Some(messages) => messages,
-            None => vec![],
-        };
+        let messages = stored_messages.unwrap_or_default();
 
         Ok(messages)
     }
@@ -230,18 +223,14 @@ impl Chatroom {
         let current_connections = self.state.storage().get::<i32>("connected_users").await;
         let active_users = self.state.storage().get::<Vec<String>>("users").await;
 
-        let mut connections = match current_connections {
-            Ok(active_connections) => active_connections,
-            Err(_) => 0,
-        };
+        let mut connections = current_connections.unwrap_or(0);
 
         let mut users = match active_users {
             Ok(users) => users,
             Err(_) => vec![],
         };
 
-        connections = connections
-            + match change_by {
+        connections += match change_by {
                 UpdateConnectionCountTypes::Increase => {
                     users.push(username);
                     1
@@ -263,7 +252,7 @@ impl Chatroom {
 
         let message_wrapper = MessageWrapper::new(
             MessageTypes::ConnectionUpdate,
-            ConnectionUpdate::new(connections.clone(), users),
+            ConnectionUpdate::new(connections, users),
         );
 
         let web_socket_conns = self.state.get_websockets();

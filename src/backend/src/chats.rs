@@ -33,8 +33,8 @@ impl Chat {
     pub fn new(name: String, password: String) -> Self {
         Chat {
             id: Uuid::new_v4().to_string(),
-            name: name,
-            password: password,
+            name,
+            password,
         }
     }
 }
@@ -62,7 +62,7 @@ impl ChatRepository {
             .await;
 
         match db_chats {
-            Ok(d1_result) => d1_result.results::<Chat>().unwrap().iter().map(|chat| ChatDTO::from(chat)).collect(),
+            Ok(d1_result) => d1_result.results::<Chat>().unwrap().iter().map(ChatDTO::from).collect(),
             Err(_) => Vec::new(),
         }
     }

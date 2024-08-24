@@ -7,7 +7,6 @@ use tracing_subscriber::{
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
 use worker::*;
-use worker_sys::web_sys::console::info;
 
 mod chatroom;
 mod chats;
@@ -60,7 +59,7 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
 }
 
 pub async fn handle_get_active_chats(
-    mut req: Request,
+    req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
     let chats = ctx.data.chat_repository.list_all_chats(10).await;
@@ -87,7 +86,7 @@ pub async fn handle_create_new_chat(
 }
 
 pub async fn handle_get_specific_chat(
-    mut req: Request,
+    req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
     if let Some(chat_id) = ctx.param("chat_id") {
@@ -106,7 +105,7 @@ pub async fn handle_get_specific_chat(
         .body(ResponseBody::Empty))
 }
 
-pub async fn handle_message(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
+pub async fn handle_message(req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
     if let Some(chat_id) = ctx.param("chat_id") {
         let object = ctx.durable_object("CHATROOM").unwrap();
         let id = object.id_from_name(chat_id.as_str()).unwrap();
@@ -120,7 +119,7 @@ pub async fn handle_message(mut req: Request, ctx: RouteContext<AppState>) -> Re
 }
 
 pub async fn handle_message_websocket(
-    mut req: Request,
+    req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
     let upgrade_header = req.headers().get("Upgrade");
@@ -147,12 +146,12 @@ pub async fn handle_message_websocket(
         let is_password_valid = ctx
             .data
             .chat_repository
-            .validate_password(&chat_id, &password.password)
+            .validate_password(chat_id, &password.password)
             .await;
 
         info!("Password match - {is_password_valid}");
 
-        if (!is_password_valid) {
+        if !is_password_valid {
             return Ok(Response::builder()
                 .with_status(401)
                 .body(ResponseBody::Empty));
