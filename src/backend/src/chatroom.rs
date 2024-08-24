@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
 use worker::{
     durable_object, Env, Request, Response, Result, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair,
@@ -16,7 +18,7 @@ struct QueryStringParameters {
 }
 
 #[derive(Deserialize, Serialize)]
-struct WebsocketConnectionAttachements {
+struct WebsocketConnectionAttachments {
     user_id: String,
 }
 
@@ -24,8 +26,6 @@ struct WebsocketConnectionAttachements {
 pub struct Chatroom {
     state: State,
     env: Env,
-    connected_users: i32,
-    user_names: Vec<String>,
     chat_repository: ChatRepository,
 }
 
@@ -34,13 +34,9 @@ impl DurableObject for Chatroom {
     fn new(state: State, env: Env) -> Self {
         let database = env.d1("CHAT_METADATA").unwrap();
 
-        
-
         Self {
             state,
             env,
-            connected_users: 0,
-            user_names: vec![],
             chat_repository: ChatRepository::new(database),
         }
     }
@@ -52,7 +48,8 @@ impl DurableObject for Chatroom {
 
         let paths = paths.collect::<Box<[_]>>();
 
-        //let _ = self.state.storage().set_alarm(Duration::from_secs(5)).await;
+        // Chats are only active for 5 minutes.
+        let _ = self.state.storage().set_alarm(Duration::from_secs(300)).await;
 
         match paths[1] {
             "connect" => self.handle_connect(req, paths).await,
@@ -66,6 +63,7 @@ impl DurableObject for Chatroom {
         info!("Alarm triggered");
 
         let chat_id = self.state.storage().get("chat_id").await.map_err(|e| {
+            warn!("{}", e);
             worker::Error::RustError("Failure retrieving chat id".to_string())
         })?;
 
@@ -87,7 +85,7 @@ impl DurableObject for Chatroom {
 
     async fn websocket_message(
         &mut self,
-        ws: WebSocket,
+        _ws: WebSocket,
         message: WebSocketIncomingMessage,
     ) -> Result<()> {
         match message {
@@ -118,8 +116,9 @@ impl DurableObject for Chatroom {
         info!("Client disconnected");
 
         let connection_attachments = ws
-            .deserialize_attachment::<WebsocketConnectionAttachements>()
+            .deserialize_attachment::<WebsocketConnectionAttachments>()
             .map_err(|e| {
+                warn!("{}", e);
                 worker::Error::RustError("Failure parsing attachemtns".to_string())
             })?;
 
@@ -140,12 +139,16 @@ impl DurableObject for Chatroom {
 
 impl Chatroom {
     async fn handle_connect(&mut self, req: Request, paths: Box<[&str]>) -> Result<Response> {
-        if let chat_id = paths[2] {
-            info!("Storing chatId {}", chat_id);
-            self.state.storage().put("chat_id", chat_id).await;
-        }
+        let chat_id = paths[2];
+
+        info!("Storing chatId {}", chat_id);
+        self.state.storage().put("chat_id", chat_id).await.map_err(|e|{
+            warn!("{}", e);
+            worker::Error::RustError("Failure updating chat_id against DO storage".to_string())
+        })?;
 
         let user_id_query_param = req.query::<QueryStringParameters>().map_err(|e| {
+            warn!("{}", e);
             worker::Error::RustError("Failure parsing query parameters".to_string())
         })?;
 
@@ -154,13 +157,19 @@ impl Chatroom {
         let WebSocketPair { client, server } = WebSocketPair::new()?;
         self.state.accept_web_socket(&server);
 
-        server.serialize_attachment(&WebsocketConnectionAttachements {
+        server.serialize_attachment(&WebsocketConnectionAttachments {
             user_id: user_id_query_param.user_id.clone(),
-        });
+        }).map_err(|e|{
+            warn!("{}", e);
+            worker::Error::RustError("Failure adding attachment to websocket connection".to_string())
+        })?;
 
-        let messages = self.load_messages().await.unwrap();
+        let messages = self.load_messages().await.map_err(|e|{
+            warn!("{}", e);
+            worker::Error::RustError("Failure loading messages from datastore".to_string())
+        })?;
 
-        server.send(&MessageWrapper::new(MessageTypes::MessageHistory, MessageHistory::new(messages)));
+        server.send(&MessageWrapper::new(MessageTypes::MessageHistory, MessageHistory::new(messages))).unwrap_or(());
 
         let _ = &self
             .update_connection_count(
@@ -180,7 +189,10 @@ impl Chatroom {
         let store = self
             .env
             .kv("CHAT_HISTORY")
-            .map_err(|e| worker::Error::RustError("Failure loading KV store".to_string()))?;
+            .map_err(|e| {
+                warn!("{}", e);
+                worker::Error::RustError("Failure loading KV store".to_string())
+            })?;
 
         let store_builder = store.put(&self.state.id().to_string(), &messages)?;
         let _ = store_builder.execute().await;
@@ -200,13 +212,17 @@ impl Chatroom {
         let store = self
             .env
             .kv("CHAT_HISTORY")
-            .map_err(|e| worker::Error::RustError("Failure loading KV store".to_string()))?;
+            .map_err(|e| {
+                warn!("{}", e);
+                worker::Error::RustError("Failure loading KV store".to_string())
+            })?;
 
         let stored_messages: Option<Vec<Message>> = store
             .get(&self.state.id().to_string())
             .json()
             .await
             .map_err(|e| {
+                warn!("{}", e);
                 worker::Error::RustError("Failure loading key for chatroom from store".to_string())
             })?;
 

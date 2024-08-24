@@ -1,6 +1,7 @@
-use serde::Deserialize;
 use ::tracing::info;
 use chats::{Chat, ChatRepository, CreateChatCommand};
+use serde::Deserialize;
+use tracing::warn;
 use tracing_subscriber::{
     fmt::{format::Pretty, time::UtcTime},
     prelude::*,
@@ -14,7 +15,7 @@ mod messaging;
 
 #[derive(Deserialize)]
 struct QueryStringParameters {
-    password: String
+    password: String,
 }
 
 #[event(start)]
@@ -36,12 +37,13 @@ pub struct AppState {
 }
 
 #[event(fetch)]
-async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
+async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
-    let database_binding = env
-        .d1("CHAT_METADATA")
-        .map_err(|e| worker::Error::RustError("CHAT_METADATA binding not found".to_string()))?;
+    let database_binding = env.d1("CHAT_METADATA").map_err(|e| {
+        warn!("{}", e);
+        worker::Error::RustError("CHAT_METADATA binding not found".to_string())
+    })?;
 
     Router::with_data(AppState {
         chat_repository: ChatRepository::new(database_binding),
@@ -59,7 +61,7 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
 }
 
 pub async fn handle_get_active_chats(
-    req: Request,
+    _req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
     let chats = ctx.data.chat_repository.list_all_chats(10).await;
@@ -80,13 +82,13 @@ pub async fn handle_create_new_chat(
         .chat_repository
         .add_chat(chat)
         .await
-        .map_err(|e| Error::RustError("Failure creating chat".to_string()))?;
+        .map_err(|_e| Error::RustError("Failure creating chat".to_string()))?;
 
     Response::from_json(&chat)
 }
 
 pub async fn handle_get_specific_chat(
-    req: Request,
+    _req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
     if let Some(chat_id) = ctx.param("chat_id") {
@@ -95,7 +97,7 @@ pub async fn handle_get_specific_chat(
             .chat_repository
             .get_chat(chat_id)
             .await
-            .map_err(|e| Error::RustError("Failure creating chat".to_string()))?;
+            .map_err(|_e| Error::RustError("Failure creating chat".to_string()))?;
 
         return Response::from_json(&chat);
     }
