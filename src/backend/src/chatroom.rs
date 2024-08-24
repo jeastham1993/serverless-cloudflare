@@ -9,7 +9,10 @@ use worker::{
 
 use crate::{
     chats::ChatRepository,
-    messaging::{ChatroomEnded, ConnectionUpdate, IncomingMessageType, Message, MessageHistory, MessageTypes, MessageWrapper},
+    messaging::{
+        ChatroomEnded, ConnectionUpdate, IncomingMessageType, Message, MessageHistory,
+        MessageTypes, MessageWrapper,
+    },
 };
 
 #[derive(Deserialize, Serialize)]
@@ -25,8 +28,10 @@ struct WebsocketConnectionAttachments {
 #[durable_object]
 pub struct Chatroom {
     state: State,
-    env: Env,
+    _env: Env,
     chat_repository: ChatRepository,
+    messages_storage_key: String,
+    chat_expiry_in_seconds: u64,
 }
 
 #[durable_object]
@@ -36,8 +41,10 @@ impl DurableObject for Chatroom {
 
         Self {
             state,
-            env,
+            _env: env,
             chat_repository: ChatRepository::new(database),
+            messages_storage_key: "messages".to_string(),
+            chat_expiry_in_seconds: 300,
         }
     }
 
@@ -48,8 +55,7 @@ impl DurableObject for Chatroom {
 
         let paths = paths.collect::<Box<[_]>>();
 
-        // Chats are only active for 5 minutes.
-        let _ = self.state.storage().set_alarm(Duration::from_secs(300)).await;
+        let _ = &self.update_chat_expiry().await;
 
         match paths[1] {
             "connect" => self.handle_connect(req, paths).await,
@@ -88,9 +94,12 @@ impl DurableObject for Chatroom {
         _ws: WebSocket,
         message: WebSocketIncomingMessage,
     ) -> Result<()> {
+        let _ = self.update_chat_expiry().await;
+
         match message {
             WebSocketIncomingMessage::String(str_data) => {
-                let incoming_message: IncomingMessageType = serde_json::from_str(&str_data).unwrap();
+                let incoming_message: IncomingMessageType =
+                    serde_json::from_str(&str_data).unwrap();
 
                 if incoming_message.message_type.as_str() == "NewMessage" {
                     let wrapper: MessageWrapper<Message> = serde_json::from_str(&str_data).unwrap();
@@ -98,8 +107,16 @@ impl DurableObject for Chatroom {
                     let _ = &self.new_message(wrapper.message).await;
                 }
             }
-            WebSocketIncomingMessage::Binary(_) => {
-                info!("Binary received");
+            WebSocketIncomingMessage::Binary(binary_data) => {
+                let incoming_message: IncomingMessageType =
+                    serde_json::from_slice(&binary_data).unwrap();
+
+                if incoming_message.message_type.as_str() == "NewMessage" {
+                    let wrapper: MessageWrapper<Message> =
+                        serde_json::from_slice(&binary_data).unwrap();
+
+                    let _ = &self.new_message(wrapper.message).await;
+                }
             }
         }
 
@@ -119,7 +136,7 @@ impl DurableObject for Chatroom {
             .deserialize_attachment::<WebsocketConnectionAttachments>()
             .map_err(|e| {
                 warn!("{}", e);
-                worker::Error::RustError("Failure parsing attachemtns".to_string())
+                worker::Error::RustError("Failure parsing attachments".to_string())
             })?;
 
         let user_id = match connection_attachments {
@@ -138,14 +155,27 @@ impl DurableObject for Chatroom {
 }
 
 impl Chatroom {
+    async fn update_chat_expiry(&mut self) -> () {
+        // Chats are only active for a rolling 5 minute window.
+        let _ = self
+            .state
+            .storage()
+            .set_alarm(Duration::from_secs(self.chat_expiry_in_seconds.clone()))
+            .await;
+    }
+
     async fn handle_connect(&mut self, req: Request, paths: Box<[&str]>) -> Result<Response> {
         let chat_id = paths[2];
 
         info!("Storing chatId {}", chat_id);
-        self.state.storage().put("chat_id", chat_id).await.map_err(|e|{
-            warn!("{}", e);
-            worker::Error::RustError("Failure updating chat_id against DO storage".to_string())
-        })?;
+        self.state
+            .storage()
+            .put("chat_id", chat_id)
+            .await
+            .map_err(|e| {
+                warn!("{}", e);
+                worker::Error::RustError("Failure updating chat_id against DO storage".to_string())
+            })?;
 
         let user_id_query_param = req.query::<QueryStringParameters>().map_err(|e| {
             warn!("{}", e);
@@ -157,19 +187,28 @@ impl Chatroom {
         let WebSocketPair { client, server } = WebSocketPair::new()?;
         self.state.accept_web_socket(&server);
 
-        server.serialize_attachment(&WebsocketConnectionAttachments {
-            user_id: user_id_query_param.user_id.clone(),
-        }).map_err(|e|{
-            warn!("{}", e);
-            worker::Error::RustError("Failure adding attachment to websocket connection".to_string())
-        })?;
+        server
+            .serialize_attachment(&WebsocketConnectionAttachments {
+                user_id: user_id_query_param.user_id.clone(),
+            })
+            .map_err(|e| {
+                warn!("{}", e);
+                worker::Error::RustError(
+                    "Failure adding attachment to websocket connection".to_string(),
+                )
+            })?;
 
-        let messages = self.load_messages().await.map_err(|e|{
+        let messages = self.load_messages().await.map_err(|e| {
             warn!("{}", e);
             worker::Error::RustError("Failure loading messages from datastore".to_string())
         })?;
 
-        server.send(&MessageWrapper::new(MessageTypes::MessageHistory, MessageHistory::new(messages))).unwrap_or(());
+        server
+            .send(&MessageWrapper::new(
+                MessageTypes::MessageHistory,
+                MessageHistory::new(messages),
+            ))
+            .unwrap_or(());
 
         let _ = &self
             .update_connection_count(
@@ -180,22 +219,20 @@ impl Chatroom {
 
         Response::from_websocket(client)
     }
-    
+
     async fn new_message(&mut self, message: Message) -> Result<Response> {
         let mut messages = self.load_messages().await?;
 
         messages.push(message.clone());
 
-        let store = self
-            .env
-            .kv("CHAT_HISTORY")
+        self.state
+            .storage()
+            .put(&self.messages_storage_key, &messages)
+            .await
             .map_err(|e| {
                 warn!("{}", e);
-                worker::Error::RustError("Failure loading KV store".to_string())
+                worker::Error::RustError("Failuring updating messages in DO storage".to_string())
             })?;
-
-        let store_builder = store.put(&self.state.id().to_string(), &messages)?;
-        let _ = store_builder.execute().await;
 
         let web_socket_conns = self.state.get_websockets();
 
@@ -209,26 +246,17 @@ impl Chatroom {
     }
 
     async fn load_messages(&mut self) -> Result<Vec<Message>> {
-        let store = self
-            .env
-            .kv("CHAT_HISTORY")
-            .map_err(|e| {
-                warn!("{}", e);
-                worker::Error::RustError("Failure loading KV store".to_string())
-            })?;
-
-        let stored_messages: Option<Vec<Message>> = store
-            .get(&self.state.id().to_string())
-            .json()
+        let stored_messages: &Vec<Message> = &self
+            .state
+            .storage()
+            .get(&self.messages_storage_key)
             .await
             .map_err(|e| {
                 warn!("{}", e);
                 worker::Error::RustError("Failure loading key for chatroom from store".to_string())
             })?;
 
-        let messages = stored_messages.unwrap_or_default();
-
-        Ok(messages)
+        Ok(stored_messages.clone())
     }
 
     async fn update_connection_count(
@@ -247,15 +275,15 @@ impl Chatroom {
         };
 
         connections += match change_by {
-                UpdateConnectionCountTypes::Increase => {
-                    users.push(username);
-                    1
-                }
-                UpdateConnectionCountTypes::Decrease => {
-                    users.retain(|x| x != &username);
-                    -1
-                }
-            };
+            UpdateConnectionCountTypes::Increase => {
+                users.push(username);
+                1
+            }
+            UpdateConnectionCountTypes::Decrease => {
+                users.retain(|x| x != &username);
+                -1
+            }
+        };
 
         let _ = self
             .state

@@ -1,4 +1,3 @@
-use ::tracing::info;
 use chats::{Chat, ChatRepository, CreateChatCommand};
 use serde::Deserialize;
 use tracing::warn;
@@ -48,11 +47,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     Router::with_data(AppState {
         chat_repository: ChatRepository::new(database_binding),
     })
-    .on_async("/api/connect/:chat_id", handle_message_websocket)
-    .get_async("/api/message/:chat_id", handle_message)
-    .put_async("/api/message/:chat_id", handle_message)
-    .post_async("/api/message/:chat_id", handle_message)
-    .delete_async("/api/message/:chat_id", handle_message)
+    
+    .on_async("/api/connect/:chat_id", handle_websocket_connect)
     .get_async("/api/chats", handle_get_active_chats)
     .get_async("/api/chats/:chat_id", handle_get_specific_chat)
     .post_async("/api/chats", handle_create_new_chat)
@@ -107,20 +103,7 @@ pub async fn handle_get_specific_chat(
         .body(ResponseBody::Empty))
 }
 
-pub async fn handle_message(req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
-    if let Some(chat_id) = ctx.param("chat_id") {
-        let object = ctx.durable_object("CHATROOM").unwrap();
-        let id = object.id_from_name(chat_id.as_str()).unwrap();
-        let stub = id.get_stub().unwrap();
-        let res = stub.fetch_with_request(req.clone().unwrap()).await.unwrap();
-
-        return Ok(res);
-    }
-
-    Response::error("Bad Request", 400)
-}
-
-pub async fn handle_message_websocket(
+pub async fn handle_websocket_connect(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
@@ -141,17 +124,14 @@ pub async fn handle_message_websocket(
                 .body(ResponseBody::Empty));
         }
 
+        // TODO: Implement ticketing for websocket auth instead of passing password as part of connection https://devcenter.heroku.com/articles/websocket-security#authentication-authorization
         let password = password_header.unwrap();
-
-        info!("Password is '{}'", &password.password);
 
         let is_password_valid = ctx
             .data
             .chat_repository
             .validate_password(chat_id, &password.password)
             .await;
-
-        info!("Password match - {is_password_valid}");
 
         if !is_password_valid {
             return Ok(Response::builder()

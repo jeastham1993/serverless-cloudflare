@@ -2,7 +2,6 @@ use std::fmt::{Display, Formatter, Result};
 
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug)]
 pub enum MessageTypes {
     NewMessage,
