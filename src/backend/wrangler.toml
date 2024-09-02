@@ -12,10 +12,6 @@ binding = "CHAT_METADATA"
 database_id = "b7768eb5-b49b-4a4d-9a21-6001222660a5"
 database_name = "rusty-serverless-chat-metadata"
 
-# [[kv_namespaces]]
-# binding = "CHAT_HISTORY"
-# id = "d5c7f7261fd843a7a306a1e3f4d440ce"
-
 [durable_objects]
 bindings = [{ name = "CHATROOM", class_name = "Chatroom" }]
 

@@ -1,16 +1,25 @@
 use chats::{Chat, ChatRepository, CreateChatCommand};
-use serde::Deserialize;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 use tracing_subscriber::{
     fmt::{format::Pretty, time::UtcTime},
     prelude::*,
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
+use users::{User, UserRepository};
 use worker::*;
 
 mod chatroom;
 mod chats;
 mod messaging;
+mod users;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+}
 
 #[derive(Deserialize)]
 struct QueryStringParameters {
@@ -33,6 +42,8 @@ fn start() {
 
 pub struct AppState {
     chat_repository: ChatRepository,
+    user_repository: UserRepository,
+    jwt_secret: String,
 }
 
 #[event(fetch)]
@@ -44,10 +55,20 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         worker::Error::RustError("CHAT_METADATA binding not found".to_string())
     })?;
 
+    let users_database_binding = env.d1("CHAT_METADATA").map_err(|e| {
+        warn!("{}", e);
+        worker::Error::RustError("CHAT_METADATA binding not found".to_string())
+    })?;
+
+    let jwt_secret = env.secret("JWT_SECRET")?.to_string();
+
     Router::with_data(AppState {
         chat_repository: ChatRepository::new(database_binding),
+        user_repository: UserRepository::new(users_database_binding),
+        jwt_secret,
     })
-    
+    .post_async("/api/register", handle_register)
+    .post_async("/api/login", handle_login)
     .on_async("/api/connect/:chat_id", handle_websocket_connect)
     .get_async("/api/chats", handle_get_active_chats)
     .get_async("/api/chats/:chat_id", handle_get_specific_chat)
@@ -56,10 +77,55 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     .await
 }
 
+pub async fn handle_register(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
+    #[derive(Deserialize)]
+    struct RegisterCommand {
+        username: String,
+        password: String,
+    }
+
+    let command: RegisterCommand = req.json().await?;
+    let user = User::new(command.username, command.password);
+
+    match ctx.data.user_repository.add_user(user).await {
+        Ok(_) => Response::ok("User registered successfully"),
+        Err(_) => Response::error("Failed to register user", 500),
+    }
+}
+
+pub async fn handle_login(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
+    #[derive(Deserialize)]
+    struct LoginCommand {
+        username: String,
+        password: String,
+    }
+
+    let command: LoginCommand = req.json().await?;
+    
+    if let Ok(user) = ctx.data.user_repository.get_user(&command.username).await {
+        if user.verify_password(&command.password) {
+            let claims = Claims {
+                sub: user.username,
+                exp: (Date::now().as_millis() / 1000) as usize + 3600, // 1 hour expiration
+            };
+
+            let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(ctx.data.jwt_secret.as_ref()))
+                .map_err(|e| Error::RustError(e.to_string()))?;
+            return Response::ok(token);
+        }
+    }
+
+    Response::error("Invalid credentials", 401)
+}
+
 pub async fn handle_get_active_chats(
-    _req: Request,
+    req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
+    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
+        return Response::error("Unauthorized", 401);
+    }
+
     let chats = ctx.data.chat_repository.list_all_chats(10).await;
 
     Response::from_json(&chats)
@@ -69,6 +135,10 @@ pub async fn handle_create_new_chat(
     mut req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
+    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
+        return Response::error("Unauthorized", 401);
+    }
+
     let command: CreateChatCommand = req.json().await.unwrap();
 
     let chat = Chat::new(command.name, command.password);
@@ -84,9 +154,13 @@ pub async fn handle_create_new_chat(
 }
 
 pub async fn handle_get_specific_chat(
-    _req: Request,
+    req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
+    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
+        return Response::error("Unauthorized", 401);
+    }
+
     if let Some(chat_id) = ctx.param("chat_id") {
         let chat = ctx
             .data
@@ -148,4 +222,13 @@ pub async fn handle_websocket_connect(
     }
 
     Response::error("Bad Request", 400)
+}
+
+fn verify_jwt(req: &Request, secret: &str) -> Result<Claims> {
+    let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
+    let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;
+    
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_ref()), &Validation::default())
+        .map_err(|e| Error::RustError(e.to_string()))?;
+    Ok(token_data.claims)
 }

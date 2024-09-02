@@ -6,6 +6,7 @@ use worker::{
     durable_object, Env, Request, Response, Result, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair,
 };
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 
 use crate::{
     chats::ChatRepository,
@@ -225,6 +226,11 @@ impl Chatroom {
 
         messages.push(message.clone());
 
+        // Consider limiting the number of stored messages
+        if messages.len() > 100 {
+            messages = messages.split_off(messages.len() - 100);
+        }
+
         self.state
             .storage()
             .put(&self.messages_storage_key, &messages)
@@ -246,34 +252,18 @@ impl Chatroom {
     }
 
     async fn load_messages(&mut self) -> Result<Vec<Message>> {
-        let stored_messages = &self
-            .state
-            .storage()
-            .get::<Vec<Message>>(&self.messages_storage_key)
-            .await;
-
-        if stored_messages.is_err() {
-            let err = stored_messages.as_ref().err().unwrap();
-            warn!("{}", err);
-            
-            let messages: Vec<Message> = vec![];
-
-            self.state
-                .storage()
-                .put(&self.messages_storage_key, &messages)
-                .await
-                .map_err(|e| {
-                    warn!("{}", e);
-                    worker::Error::RustError(
-                        "Failuring updating messages in DO storage".to_string(),
-                    )
-                })?;
-            return Ok(messages);
+        match self.state.storage().get::<Vec<Message>>(&self.messages_storage_key).await {
+            Ok(messages) => {
+                info!("Stored message count {}", messages.len());
+                Ok(messages)
+            },
+            Err(e) => {
+                warn!("Error loading messages: {}", e);
+                let messages = Vec::new();
+                self.state.storage().put(&self.messages_storage_key, &messages).await?;
+                Ok(messages)
+            }
         }
-
-        info!("Stored message count {}", stored_messages.as_ref().unwrap().len());
-
-        Ok(stored_messages.as_ref().unwrap().clone())
     }
 
     async fn update_connection_count(
