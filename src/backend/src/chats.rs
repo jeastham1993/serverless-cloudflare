@@ -24,17 +24,19 @@ impl ChatDTO {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Chat {
-    id: String,
-    name: String,
-    password: String,
+    pub id: String,
+    pub name: String,
+    pub password: String,
+    pub created_by: String,
 }
 
 impl Chat {
-    pub fn new(name: String, password: String) -> Self {
+    pub fn new(name: String, password: String, created_by: String) -> Self {
         Chat {
             id: Uuid::new_v4().to_string(),
             name,
             password,
+            created_by,
         }
     }
 }
@@ -52,7 +54,7 @@ impl ChatRepository {
         let db_chats = &self
             .database
             .prepare(
-                "SELECT id, name, password
+                "SELECT id, name, password, created_by
         FROM chats c
         LIMIT ?1",
             )
@@ -71,7 +73,7 @@ impl ChatRepository {
         let db_chats = &self
             .database
             .prepare(
-                "SELECT id, name, password
+                "SELECT id, name, password, created_by
 FROM chats c
 WHERE c.id = ?1",
             )
@@ -95,7 +97,7 @@ WHERE c.id = ?1",
         let db_chats = &self
             .database
             .prepare(
-                "SELECT id, name, password
+                "SELECT id, name, password, created_by
 FROM chats c
 WHERE c.id = ?1",
             )
@@ -138,15 +140,16 @@ WHERE id = ?1",
             .database
             .prepare(
                 "INSERT INTO chats
-(id, name, password)
-VALUES
-(?1, ?2, ?3)
-RETURNING *;",
+            (id, name, password, created_by)
+            VALUES
+            (?1, ?2, ?3, ?4)
+            RETURNING *;",
             )
             .bind(&[
                 JsValue::from(chat.id),
                 JsValue::from(chat.name),
-                JsValue::from(chat.password)
+                JsValue::from(chat.password),
+                JsValue::from(chat.created_by)
             ])
             .unwrap()
             .first::<Chat>(None)
@@ -157,7 +160,6 @@ RETURNING *;",
                 None => Err(()),
                 Some(chat) => {
                     let cloned_chat = chat.clone();
-
                     Ok(cloned_chat)
                 }
             },

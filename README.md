@@ -81,8 +81,8 @@ id = "" # KV namespace ID goes here
 Then run the below commands
 
 ```sh
-npx wrangler d1 migrations apply rusty-serverless-chat-metadata --remote
 cd src backend
+npx wrangler d1 migrations apply rusty-serverless-chat-metadata --remote
 npx wrangler deploy
 cd ..
 npx wrangler pages deploy

@@ -4,6 +4,28 @@ $(document).ready(function () {
   refreshData();
 });
 
+$.ajaxSetup({
+  beforeSend: function(xhr) {
+      const jwt = localStorage.getItem('jwt');
+      if (jwt) {
+          xhr.setRequestHeader('Authorization', 'Bearer ' + jwt);
+      }
+  },
+  statusCode: {
+      401: handleUnauthorized
+  }
+});
+
+function logout() {
+  localStorage.removeItem('jwt');
+  window.location.href = '/login';
+}
+
+function handleUnauthorized() {
+  localStorage.removeItem('jwt');
+  window.location.href = '/login';
+}
+
 function createChat() {
   const name = document.getElementById("chat_name").value;
   const chatPassword = document.getElementById("chat_password").value;
@@ -21,6 +43,7 @@ function createChat() {
   var xhr = new XMLHttpRequest();
   xhr.open("POST", `${api_root}/api/chats`, true);
   xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.setRequestHeader("Authorization", 'Bearer ' + localStorage.getItem('jwt'));
   xhr.send(
     JSON.stringify({
       name: name,
@@ -53,6 +76,7 @@ function refreshData() {
   var xhr = new XMLHttpRequest();
   xhr.open("GET", `${api_root}/api/chats`, true);
   xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.setRequestHeader("Authorization", 'Bearer ' + localStorage.getItem('jwt'));
   xhr.send();
   xhr.onload = () => {
     if (xhr.readyState == 4 && xhr.status == 200) {

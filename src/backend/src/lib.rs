@@ -23,7 +23,7 @@ struct Claims {
 
 #[derive(Deserialize)]
 struct QueryStringParameters {
-    password: String,
+    key: String,
 }
 
 #[event(start)]
@@ -135,13 +135,14 @@ pub async fn handle_create_new_chat(
     mut req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
-    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
-        return Response::error("Unauthorized", 401);
-    }
+    let claims = match verify_jwt(&req, &ctx.data.jwt_secret) {
+        Ok(claims) => claims,
+        Err(_) => return Response::error("Unauthorized", 401),
+    };
 
     let command: CreateChatCommand = req.json().await.unwrap();
 
-    let chat = Chat::new(command.name, command.password);
+    let chat = Chat::new(command.name, command.password, claims.sub);
 
     let chat = ctx
         .data
@@ -198,25 +199,21 @@ pub async fn handle_websocket_connect(
                 .body(ResponseBody::Empty));
         }
 
-        // TODO: Implement ticketing for websocket auth instead of passing password as part of connection https://devcenter.heroku.com/articles/websocket-security#authentication-authorization
-        let password = password_header.unwrap();
+        let claims = match verify_jwt_token(&password_header.unwrap().key, &ctx.data.jwt_secret) {
+            Ok(claims) => claims,
+            Err(_) => return Response::error("Unauthorized", 401),
+        };
 
-        let is_password_valid = ctx
-            .data
-            .chat_repository
-            .validate_password(chat_id, &password.password)
-            .await;
-
-        if !is_password_valid {
-            return Ok(Response::builder()
-                .with_status(401)
-                .body(ResponseBody::Empty));
-        }
+        let url = req.url()?;
+        let mut new_url = url.clone();
+        new_url.set_query(Some(&format!("user_id={}", claims.sub)));
+        let mut new_req = Request::new(new_url.as_str(), req.method())?;
+        let _ = new_req.headers_mut()?.set("Upgrade", "websocket");
 
         let object = ctx.durable_object("CHATROOM").unwrap();
         let id = object.id_from_name(chat_id.as_str()).unwrap();
         let stub = id.get_stub().unwrap();
-        let res = stub.fetch_with_request(req.clone().unwrap()).await.unwrap();
+        let res = stub.fetch_with_request(new_req).await.unwrap();
 
         return Ok(res);
     }
@@ -225,9 +222,16 @@ pub async fn handle_websocket_connect(
 }
 
 fn verify_jwt(req: &Request, secret: &str) -> Result<Claims> {
+    tracing::info!("Verifying JWT");
     let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
+
     let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;
     
+    verify_jwt_token(token, secret)
+}
+
+fn verify_jwt_token(token: &str, secret: &str) -> Result<Claims> {
+    tracing::info!("Verifying JWT");
     let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_ref()), &Validation::default())
         .map_err(|e| Error::RustError(e.to_string()))?;
     Ok(token_data.claims)

@@ -9,3 +9,19 @@
     height: 60vh;
     overflow-x: scroll;
 }
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  main {
+    flex: 1;
+  }
+  
+  footer {
+    margin-top: auto;
+    padding: 1rem 0;
+    text-align: center;
+  }

@@ -17,14 +17,21 @@
         href="/style.css"
     />
   </head>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="/chats.js"></script>
-  </head>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  <script type="text/javascript" src="/chats.js"></script>
+  <head>
   <body>
     <header class="container">
-      <hgroup>
-        <h1>Rusty Chat</h1>
-      </hgroup>
+      <nav>
+        <ul>
+          <li>
+            <h1>Rusty Chat</h1>
+          </li>
+        </ul>
+        <ul>
+          <li><button onclick="logout()">Logout</button></li>
+        </ul>
+      </nav>
     </header>
     <main class="container">
       <div class="grid">
@@ -54,5 +61,13 @@
         </table>
       </div>
   </main>
+  <footer class="container">
+    <p>
+      Source code available on 
+      <a href="https://github.com/jeastham1993/serverless-cloudflare" target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
+    </p>
+  </footer>
   </body>
 </html>

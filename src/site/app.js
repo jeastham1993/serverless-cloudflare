@@ -11,12 +11,6 @@ let ws = undefined;
 $(document).ready(function () {
   isConnected = false;
 
-  if (username !== undefined && username !== null) {
-    document.getElementById("username").value = username;
-  } else {
-    username = "";
-  }
-
   checkForChatIdQueryParam();
 
   if (
@@ -27,6 +21,8 @@ $(document).ready(function () {
     window.location = "/chats";
   }
 
+  connectWebsockets();
+
   document
     .getElementById("message")
     .addEventListener("keydown", function (event) {
@@ -35,6 +31,29 @@ $(document).ready(function () {
       }
     });
 });
+
+// Update your AJAX calls to include the JWT and handle 401 errors
+$.ajaxSetup({
+  beforeSend: function(xhr) {
+      const jwt = localStorage.getItem('jwt');
+      if (jwt) {
+          xhr.setRequestHeader('Authorization', 'Bearer ' + jwt);
+      }
+  },
+  statusCode: {
+      401: handleUnauthorized
+  }
+});
+
+function logout() {
+  localStorage.removeItem('jwt');
+  window.location.href = '/login';
+}
+
+function handleUnauthorized() {
+  localStorage.removeItem('jwt');
+  window.location.href = '/login';
+}
 
 function checkForChatIdQueryParam() {
   const chatUrlParameters = new URLSearchParams(window.location.search);
@@ -48,14 +67,6 @@ function checkForChatIdQueryParam() {
     console.log("setting item");
     localStorage.setItem(chatRoomIdLocalStorageKey, chatIdParam);
     window.location = "/";
-  }
-}
-
-function connectBtnClick() {
-  if (isConnected) {
-    disconnectWebsockets();
-  } else {
-    connectWebsockets();
   }
 }
 
@@ -99,24 +110,8 @@ function updateConnectionStatus() {
 }
 
 function connectWebsockets() {
-  const userNameInputValue = document.getElementById("username").value;
-  const passwordInputValue = document.getElementById("password").value;
-
-  if (userNameInputValue.length <= 0) {
-    alert("User name must not be empty.");
-    return;
-  }
-
-  if (passwordInputValue.length <= 0) {
-    alert("Password must not be empty");
-    return;
-  }
-
-  username = userNameInputValue;
-
-  //TODO: Update password to use 'tickets' instead.
   ws = new WebSocket(
-    `${ws_root}/api/connect/${chatroomId}?user_id=${username}&password=${passwordInputValue}`
+    `${ws_root}/api/connect/${chatroomId}?key=${localStorage.getItem('jwt')}`
   );
 
   ws.onopen = () => {
@@ -154,14 +149,8 @@ function connectWebsockets() {
   };
 }
 
-function disconnectWebsockets() {
-  const connectButton = document.getElementById("connectBtn");
-  connectButton.innerText = "Disconnecting...";
-  const connectionStatusText = document.getElementById("connectionStatus");
-  connectionStatusText.innerText = "Disconnecting";
-
-  ws.close(1000);
-  return;
+function leaveRoom() {
+  window.location = "/chats";
 }
 
 function handleNewMessage(jsonMessageData) {

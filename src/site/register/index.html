@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Rusty Chat - Register</title>
+    <meta name="description" content="Register for Rusty Chat" />
+
+    <!-- Pico.css -->
+    <link
+      rel='stylesheet'
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css"
+    />
+    <link
+        rel="stylesheet"
+        href="/style.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="/register.js"></script>
+  </head>
+  <body>
+    <header class="container">
+      <hgroup>
+        <h1>Rusty Chat - Register</h1>
+      </hgroup>
+    </header>
+    <main class="container">
+      <div class="grid">
+        <input id="username" type="text"
+          name="username"
+          placeholder="Username"
+          aria-label="Username"
+          required/>
+        <input id="password" type="password"
+          name="password"
+          placeholder="Password"
+          aria-label="Password"
+          required/>
+        <button id="registerBtn" onclick="register()">Register</button>
+      </div>
+      <p>Already have an account? <a href="/login">Login here</a></p>
+    </main>
+    <footer class="container">
+      <p>
+        Source code available on 
+        <a href="https://github.com/jeastham1993/serverless-cloudflare" target="_blank" rel="noopener noreferrer">
+          GitHub
+        </a>
+      </p>
+    </footer>
+  </body>
+</html>
