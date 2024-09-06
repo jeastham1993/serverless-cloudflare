@@ -9,7 +9,7 @@ function login() {
         data: JSON.stringify({ username, password }),
         success: function(response) {
             localStorage.setItem('username', username);
-            localStorage.setItem('jwt', response);
+            localStorage.setItem('jwt', response.token);
             window.location.href = '/chats';
         },
         error: function(xhr, status, error) {

@@ -7,6 +7,10 @@ dev-pages:
 dev-backend:
 	cd src/backend;npx wrangler dev
 
+deploy:
+	cd src;npx wrangler pages deploy
+	cd src/backend; npx wrangler deploy
+
 test:
 	cd src/backend;npx wrangler deploy --dry-run;cd ../../;npm run test
 
