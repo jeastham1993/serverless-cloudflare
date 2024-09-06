@@ -87,3 +87,9 @@ npx wrangler deploy
 cd ..
 npx wrangler pages deploy
 ```
+
+## Troubleshooting
+
+### Unable to build for wasm32-unknown-unknown
+
+Apple Clang is a forked version of Clang specific to the Apple ecosystem. It does not provide support for `wasm32-unknown-unknown`. To compile, you need to install `llvm.org` Clang instead of the Apple package one. Instructions can be found in [this GitHub issue](https://github.com/briansmith/ring/issues/1824).

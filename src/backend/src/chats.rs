@@ -6,8 +6,7 @@ use worker::D1Database;
 
 #[derive(Deserialize)]
 pub struct CreateChatCommand{
-    pub name: String,
-    pub password: String
+    pub name: String
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -26,16 +25,14 @@ impl ChatDTO {
 pub struct Chat {
     pub id: String,
     pub name: String,
-    pub password: String,
     pub created_by: String,
 }
 
 impl Chat {
-    pub fn new(name: String, password: String, created_by: String) -> Self {
+    pub fn new(name: String, created_by: String) -> Self {
         Chat {
             id: Uuid::new_v4().to_string(),
             name,
-            password,
             created_by,
         }
     }
@@ -54,7 +51,7 @@ impl ChatRepository {
         let db_chats = &self
             .database
             .prepare(
-                "SELECT id, name, password, created_by
+                "SELECT id, name, created_by
         FROM chats c
         LIMIT ?1",
             )
@@ -73,7 +70,7 @@ impl ChatRepository {
         let db_chats = &self
             .database
             .prepare(
-                "SELECT id, name, password, created_by
+                "SELECT id, name, created_by
 FROM chats c
 WHERE c.id = ?1",
             )
@@ -90,31 +87,6 @@ WHERE c.id = ?1",
                 }
             },
             Err(_) => Err(()),
-        }
-    }
-
-    pub async fn validate_password(&self, id: &str, password: &str) -> bool {
-        let db_chats = &self
-            .database
-            .prepare(
-                "SELECT id, name, password, created_by
-FROM chats c
-WHERE c.id = ?1",
-            )
-            .bind(&[JsValue::from(id)])
-            .unwrap()
-            .first::<Chat>(None)
-            .await;
-
-        match db_chats {
-            Ok(d1_result) => match d1_result {
-                None => false,
-                Some(chat) => {
-                    info!("Stored password is {}", &chat.password);
-                    chat.password == password
-                }
-            },
-            Err(_) => false,
         }
     }
 
@@ -140,15 +112,14 @@ WHERE id = ?1",
             .database
             .prepare(
                 "INSERT INTO chats
-            (id, name, password, created_by)
+            (id, name, created_by)
             VALUES
-            (?1, ?2, ?3, ?4)
+            (?1, ?2, ?3)
             RETURNING *;",
             )
             .bind(&[
                 JsValue::from(chat.id),
                 JsValue::from(chat.name),
-                JsValue::from(chat.password),
                 JsValue::from(chat.created_by)
             ])
             .unwrap()

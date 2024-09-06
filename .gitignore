@@ -57,3 +57,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Cloudflare local dev files
+**/.mf/*

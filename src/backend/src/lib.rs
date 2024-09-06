@@ -89,7 +89,11 @@ pub async fn handle_register(mut req: Request, ctx: RouteContext<AppState>) -> R
 
     match ctx.data.user_repository.add_user(user).await {
         Ok(_) => Response::ok("User registered successfully"),
-        Err(_) => Response::error("Failed to register user", 500),
+        Err(e) => {
+            tracing::info!("Failure");
+            tracing::error!("{}", e);
+            Response::error("Failed to register user", 500)
+        },
     }
 }
 
@@ -99,6 +103,12 @@ pub async fn handle_login(mut req: Request, ctx: RouteContext<AppState>) -> Resu
         username: String,
         password: String,
     }
+
+    #[derive(Serialize)]
+    struct LoginResponse {
+        token: String,
+    }
+
 
     let command: LoginCommand = req.json().await?;
     
@@ -111,7 +121,10 @@ pub async fn handle_login(mut req: Request, ctx: RouteContext<AppState>) -> Resu
 
             let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(ctx.data.jwt_secret.as_ref()))
                 .map_err(|e| Error::RustError(e.to_string()))?;
-            return Response::ok(token);
+
+            return Response::from_json(&LoginResponse{
+                token
+            })
         }
     }
 
@@ -142,7 +155,7 @@ pub async fn handle_create_new_chat(
 
     let command: CreateChatCommand = req.json().await.unwrap();
 
-    let chat = Chat::new(command.name, command.password, claims.sub);
+    let chat = Chat::new(command.name, claims.sub);
 
     let chat = ctx
         .data
@@ -168,7 +181,7 @@ pub async fn handle_get_specific_chat(
             .chat_repository
             .get_chat(chat_id)
             .await
-            .map_err(|_e| Error::RustError("Failure creating chat".to_string()))?;
+            .map_err(|_e| Error::RustError("Failure retrieving chat".to_string()))?;
 
         return Response::from_json(&chat);
     }
