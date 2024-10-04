@@ -1,5 +1,5 @@
+use auth::AuthenticationService;
 use chats::{Chat, ChatRepository, CreateChatCommand};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 use tracing_subscriber::{
@@ -7,14 +7,14 @@ use tracing_subscriber::{
     prelude::*,
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
-use users::{User, UserRepository};
+use users::{LoginCommand, RegisterCommand, UserRepository};
 use worker::*;
 
 mod chatroom;
 mod chats;
 mod messaging;
 mod users;
-
+mod auth;
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: String,
@@ -43,7 +43,7 @@ fn start() {
 pub struct AppState {
     chat_repository: ChatRepository,
     user_repository: UserRepository,
-    jwt_secret: String,
+    auth_service: AuthenticationService
 }
 
 #[event(fetch)]
@@ -70,7 +70,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     Router::with_data(AppState {
         chat_repository: ChatRepository::new(database_binding, cache_binding),
         user_repository: UserRepository::new(users_database_binding),
-        jwt_secret,
+        auth_service: AuthenticationService::new(jwt_secret)
     })
     .post_async("/api/register", handle_register)
     .post_async("/api/login", handle_login)
@@ -83,64 +83,34 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 }
 
 pub async fn handle_register(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
-    #[derive(Deserialize)]
-    struct RegisterCommand {
-        username: String,
-        password: String,
-    }
-
     let command: RegisterCommand = req.json().await?;
-    let user = User::new(command.username, command.password);
-
-    match ctx.data.user_repository.add_user(user).await {
-        Ok(_) => Response::ok("User registered successfully"),
-        Err(e) => {
-            tracing::info!("Failure");
-            tracing::error!("{}", e);
-            Response::error("Failed to register user", 500)
+    
+    match command.handle(&ctx.data.user_repository).await {
+        Ok(user_result) => Response::from_json(&user_result),
+        Err(e) => match e {
+            users::UserErrors::UnknownFailure =>  Response::error("Failed to register user", 500),
+            users::UserErrors::InvalidPassword => Response::error("Failed to register user", 500)
         },
     }
 }
 
 pub async fn handle_login(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
-    #[derive(Deserialize)]
-    struct LoginCommand {
-        username: String,
-        password: String,
-    }
-
-    #[derive(Serialize)]
-    struct LoginResponse {
-        token: String,
-    }
-
-
     let command: LoginCommand = req.json().await?;
-    
-    if let Ok(user) = ctx.data.user_repository.get_user(&command.username).await {
-        if user.verify_password(&command.password) {
-            let claims = Claims {
-                sub: user.username,
-                exp: (Date::now().as_millis() / 1000) as usize + 3600, // 1 hour expiration
-            };
 
-            let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(ctx.data.jwt_secret.as_ref()))
-                .map_err(|e| Error::RustError(e.to_string()))?;
-
-            return Response::from_json(&LoginResponse{
-                token
-            })
+    match command.handle(&ctx.data.user_repository, &ctx.data.auth_service).await {
+        Ok(resp) => Response::from_json(&resp),
+        Err(e) => match e {
+            users::UserErrors::InvalidPassword => Response::error("Unauthorized", 401),
+            users::UserErrors::UnknownFailure => Response::error("Failed ", 500)
         }
     }
-
-    Response::error("Invalid credentials", 401)
 }
 
 pub async fn handle_get_active_chats(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
-    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
+    if let Err(_) = verify_jwt(&req, &ctx.data.auth_service) {
         return Response::error("Unauthorized", 401);
     }
 
@@ -153,7 +123,7 @@ pub async fn handle_create_new_chat(
     mut req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
-    let claims = match verify_jwt(&req, &ctx.data.jwt_secret) {
+    let claims = match verify_jwt(&req, &ctx.data.auth_service) {
         Ok(claims) => claims,
         Err(_) => return Response::error("Unauthorized", 401),
     };
@@ -176,7 +146,7 @@ pub async fn handle_get_specific_chat(
     req: Request,
     ctx: RouteContext<AppState>,
 ) -> Result<Response> {
-    if let Err(_) = verify_jwt(&req, &ctx.data.jwt_secret) {
+    if let Err(_) = verify_jwt(&req, &ctx.data.auth_service) {
         return Response::error("Unauthorized", 401);
     }
 
@@ -217,38 +187,34 @@ pub async fn handle_websocket_connect(
                 .body(ResponseBody::Empty));
         }
 
-        let claims = match verify_jwt_token(&password_header.unwrap().key, &ctx.data.jwt_secret) {
-            Ok(claims) => claims,
+        match &ctx.data.auth_service.verify_jwt_token(&password_header.unwrap().key) {
+            Ok(claims) => {
+                let url = req.url()?;
+                let mut new_url = url.clone();
+                new_url.set_query(Some(&format!("user_id={}", claims.sub)));
+                let mut new_req = Request::new(new_url.as_str(), req.method())?;
+                let _ = new_req.headers_mut()?.set("Upgrade", "websocket");
+
+                let object = ctx.durable_object("CHATROOM").unwrap();
+                let id = object.id_from_name(chat_id.as_str()).unwrap();
+                let stub = id.get_stub().unwrap();
+                let res = stub.fetch_with_request(new_req).await.unwrap();
+
+                return Ok(res);
+            },
             Err(_) => return Response::error("Unauthorized", 401),
         };
-
-        let url = req.url()?;
-        let mut new_url = url.clone();
-        new_url.set_query(Some(&format!("user_id={}", claims.sub)));
-        let mut new_req = Request::new(new_url.as_str(), req.method())?;
-        let _ = new_req.headers_mut()?.set("Upgrade", "websocket");
-
-        let object = ctx.durable_object("CHATROOM").unwrap();
-        let id = object.id_from_name(chat_id.as_str()).unwrap();
-        let stub = id.get_stub().unwrap();
-        let res = stub.fetch_with_request(new_req).await.unwrap();
-
-        return Ok(res);
     }
 
     Response::error("Bad Request", 400)
 }
-
-fn verify_jwt(req: &Request, secret: &str) -> Result<Claims> {
+pub fn verify_jwt(req: &Request, auth_service: &AuthenticationService) -> Result<Claims> {
+    tracing::info!("Verifying JWT");
     let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
 
     let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;
     
-    verify_jwt_token(token, secret)
-}
+    let token = auth_service.verify_jwt_token(token).map_err(|_e| Error::RustError("Failure verifying token".to_string()))?;
 
-fn verify_jwt_token(token: &str, secret: &str) -> Result<Claims> {
-    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_ref()), &Validation::default())
-        .map_err(|e| Error::RustError(e.to_string()))?;
-    Ok(token_data.claims)
+    Ok(token)
 }

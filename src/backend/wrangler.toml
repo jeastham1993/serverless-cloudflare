@@ -8,6 +8,9 @@ kv_namespaces = [
   { binding = "CHAT_CACHE", id = "69a2638c739c49f0a4e224fbd0090990" }
 ]
 
+[placement]
+mode = "smart"
+
 [build]
 command = "cargo install -q worker-build && worker-build --release" # required
 
