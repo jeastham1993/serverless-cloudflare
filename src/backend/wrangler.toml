@@ -4,8 +4,15 @@ compatibility_date = "2024-04-05"
 logpush = true
 workers_dev = false
 
+kv_namespaces = [
+  { binding = "CHAT_CACHE", id = "69a2638c739c49f0a4e224fbd0090990" }
+]
+
 [build]
 command = "cargo install -q worker-build && worker-build --release" # required
+
+[observability]
+enabled = true
 
 [[d1_databases]]
 binding = "CHAT_METADATA"
@@ -18,3 +25,11 @@ bindings = [{ name = "CHATROOM", class_name = "Chatroom" }]
 [[migrations]]
 tag = "v1"                 # Should be unique for each entry
 new_classes = ["Chatroom"] # Array of new classes
+
+# Different values for staging environment
+[env.staging]
+name = "rusty-chatroom-staging"
+
+kv_namespaces = [
+  { binding = "CHAT_CACHE", id = "69a2638c739c49f0a4e224fbd0090990" }
+]

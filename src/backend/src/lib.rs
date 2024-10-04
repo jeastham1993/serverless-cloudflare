@@ -55,6 +55,11 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         worker::Error::RustError("CHAT_METADATA binding not found".to_string())
     })?;
 
+    let cache_binding = env.kv("CHAT_CACHE").map_err(|e| {
+        warn!("{}", e);
+        worker::Error::RustError("CHAT_CACHE binding not found".to_string())
+    })?;
+
     let users_database_binding = env.d1("CHAT_METADATA").map_err(|e| {
         warn!("{}", e);
         worker::Error::RustError("CHAT_METADATA binding not found".to_string())
@@ -63,7 +68,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let jwt_secret = env.secret("JWT_SECRET")?.to_string();
 
     Router::with_data(AppState {
-        chat_repository: ChatRepository::new(database_binding),
+        chat_repository: ChatRepository::new(database_binding, cache_binding),
         user_repository: UserRepository::new(users_database_binding),
         jwt_secret,
     })
@@ -235,7 +240,6 @@ pub async fn handle_websocket_connect(
 }
 
 fn verify_jwt(req: &Request, secret: &str) -> Result<Claims> {
-    tracing::info!("Verifying JWT");
     let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
 
     let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;
@@ -244,7 +248,6 @@ fn verify_jwt(req: &Request, secret: &str) -> Result<Claims> {
 }
 
 fn verify_jwt_token(token: &str, secret: &str) -> Result<Claims> {
-    tracing::info!("Verifying JWT");
     let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_ref()), &Validation::default())
         .map_err(|e| Error::RustError(e.to_string()))?;
     Ok(token_data.claims)

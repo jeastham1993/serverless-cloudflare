@@ -39,11 +39,12 @@ pub struct Chatroom {
 impl DurableObject for Chatroom {
     fn new(state: State, env: Env) -> Self {
         let database = env.d1("CHAT_METADATA").unwrap();
+        let cache = env.kv("CHAT_CACHE").unwrap();
 
         Self {
             state,
             _env: env,
-            chat_repository: ChatRepository::new(database),
+            chat_repository: ChatRepository::new(database, cache),
             messages_storage_key: "messages".to_string(),
             chat_expiry_in_seconds: 300,
         }
