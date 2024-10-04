@@ -208,8 +208,8 @@ pub async fn handle_websocket_connect(
 
     Response::error("Bad Request", 400)
 }
-pub fn verify_jwt(req: &Request, auth_service: &AuthenticationService) -> Result<Claims> {
-    tracing::info!("Verifying JWT");
+
+fn verify_jwt(req: &Request, auth_service: &AuthenticationService) -> Result<Claims> {
     let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
 
     let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;

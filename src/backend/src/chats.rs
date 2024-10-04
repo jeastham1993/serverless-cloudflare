@@ -47,10 +47,10 @@ pub struct ChatRepository {
 }
 
 impl ChatRepository {
-    pub fn new(database: D1Database, kvStore: KvStore) -> Self {
+    pub fn new(database: D1Database, kv_store: KvStore) -> Self {
         ChatRepository {
             database,
-            cache: kvStore,
+            cache: kv_store,
         }
     }
 

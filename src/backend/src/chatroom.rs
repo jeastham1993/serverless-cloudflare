@@ -6,7 +6,6 @@ use worker::{
     durable_object, Env, Request, Response, Result, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair,
 };
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 
 use crate::{
     chats::ChatRepository,
