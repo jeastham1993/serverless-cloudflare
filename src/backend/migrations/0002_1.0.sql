@@ -1,8 +1,5 @@
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+ALTER TABLE chats ADD COLUMN created_by TEXT NOT NULL DEFAULT 'unknown';
 
-CREATE INDEX idx_username ON users(username);
+UPDATE chats SET created_by = 'unknown' WHERE created_by = 'unknown';
+
+CREATE INDEX idx_chats_created_by ON chats(created_by);

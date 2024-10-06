@@ -7,9 +7,13 @@ dev-pages:
 dev-backend:
 	cd src/backend;npx wrangler dev
 
+dev-authentication:
+	cd src/authentication;npx wrangler dev
+
 deploy:
 	cd src;npx wrangler pages deploy
 	cd src/backend; npx wrangler deploy
+	cd src/authentication; npx wrangler deploy
 
 test:
 	cd src/backend;npx wrangler deploy --dry-run;cd ../../;npm run test

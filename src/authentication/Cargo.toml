@@ -1,5 +1,5 @@
 [package]
-name = "rusty-chatroom"
+name = "authentication"
 version = "0.1.0"
 edition = "2021"
 

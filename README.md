@@ -25,6 +25,19 @@ Once you have created a chat, you will be redirected to the `/` interface. The r
 
 Wrangler, the Cloudflare CLI, packages the ability to run local development environments. To run the chat application locally, you'll need **two seperate** terminal windows, and the below CLI commands.
 
+## Local Postgres DB
+
+The users backend uses Postgres as it's database provider. When deployed to Cloudflare, the [Hyperdrive](https://developers.cloudflare.com/hyperdrive/) service is used. Hyperdrive cannot be used locally, so a local Postgres instance is used instead.
+
+```sh
+docker run -p 5432:5432 --name postgres -e POSTGRES_PASSWORD=mysecretpassword -d postgres
+docker exec postgres psql -U postgres -c "CREATE DATABASE users;"
+docker exec postgres psql -U postgres -d users -c "CREATE TABLE users (id SERIAL PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+docker exec postgres psql -U postgres -d users -c "CREATE INDEX idx_username ON users(username);"
+```
+
+The `localConnectionString` property in [wrangler.toml](./src/backend/wrangler.toml) overrides the connection when running locally.
+
 ### Terminal Window 1
 
 In the first terminal window, you will start up the local instance of the chat application backend. The backend uses Workers, D1, KV and Durable Objects to provide chatroom functionality.

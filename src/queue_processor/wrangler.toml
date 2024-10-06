@@ -1,0 +1,14 @@
+name = "queue-processor"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-04-05"
+logpush = true
+workers_dev = false
+
+[placement]
+mode = "smart"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required
+
+[[queues.consumers]]
+queue = "user-notifications"

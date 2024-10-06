@@ -1,0 +1,20 @@
+name = "authentication"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-04-05"
+logpush = true
+workers_dev = false
+
+[placement]
+mode = "smart"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required
+
+[[hyperdrive]]
+binding = "DB"
+id = "701440b2d98841a3863ee9fe808f421e"
+localConnectionString = "postgres://postgres:mysecretpassword@localhost:5432/users"
+
+[[queues.producers]]
+queue = "user-notifications"
+binding = "USER_NOTIFICATIONS"

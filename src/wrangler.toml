@@ -3,7 +3,8 @@ pages_build_output_dir = "./site"
 compatibility_date = "2024-04-05"
 compatibility_flags = ["nodejs_compat"]
 services = [
-    {binding = "BACKEND", service = "rusty-chatroom"}
+    {binding = "BACKEND", service = "rusty-chatroom"},
+    {binding = "AUTH", service = "authentication"},
 ]
 
 [[env.preview.services]]
@@ -13,4 +14,12 @@ binding = "BACKEND"
 [[env.production.services]]
 service = "rusty-chatroom"
 binding = "BACKEND"
+
+[[env.preview.services]]
+service = "authentication"
+binding = "AUTH"
+
+[[env.production.services]]
+service = "authentication"
+binding = "AUTH"
 

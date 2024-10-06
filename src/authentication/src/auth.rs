@@ -1,12 +1,7 @@
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
 use worker::Date;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub sub: String,
-    pub exp: usize,
-}
+use crate::Claims;
 
 pub struct AuthenticationService {
     jwt_secret: String

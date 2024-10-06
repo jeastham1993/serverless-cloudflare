@@ -1,25 +1,19 @@
-use auth::AuthenticationService;
+use auth::{AuthenticationService, Claims};
 use chats::{Chat, ChatRepository, CreateChatCommand};
-use serde::{Deserialize, Serialize};
-use tracing::warn;
+use serde::Deserialize;
+use tracing::{info, warn};
 use tracing_subscriber::{
     fmt::{format::Pretty, time::UtcTime},
     prelude::*,
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
-use users::{LoginCommand, RegisterCommand, UserRepository};
 use worker::*;
+use worker::postgres_tls::PassthroughTls;
 
+mod auth;
 mod chatroom;
 mod chats;
 mod messaging;
-mod users;
-mod auth;
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    exp: usize,
-}
 
 #[derive(Deserialize)]
 struct QueryStringParameters {
@@ -42,7 +36,6 @@ fn start() {
 
 pub struct AppState {
     chat_repository: ChatRepository,
-    user_repository: UserRepository,
     auth_service: AuthenticationService
 }
 
@@ -55,50 +48,19 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         worker::Error::RustError("CHAT_METADATA binding not found".to_string())
     })?;
 
-    let users_database_binding = env.d1("CHAT_METADATA").map_err(|e| {
-        warn!("{}", e);
-        worker::Error::RustError("CHAT_METADATA binding not found".to_string())
-    })?;
-
     let jwt_secret = env.secret("JWT_SECRET")?.to_string();
 
     Router::with_data(AppState {
         chat_repository: ChatRepository::new(database_binding),
-        user_repository: UserRepository::new(users_database_binding),
         auth_service: AuthenticationService::new(jwt_secret)
+        
     })
-    .post_async("/api/register", handle_register)
-    .post_async("/api/login", handle_login)
     .on_async("/api/connect/:chat_id", handle_websocket_connect)
     .get_async("/api/chats", handle_get_active_chats)
     .get_async("/api/chats/:chat_id", handle_get_specific_chat)
     .post_async("/api/chats", handle_create_new_chat)
     .run(req, env)
     .await
-}
-
-pub async fn handle_register(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
-    let command: RegisterCommand = req.json().await?;
-    
-    match command.handle(&ctx.data.user_repository).await {
-        Ok(user_result) => Response::from_json(&user_result),
-        Err(e) => match e {
-            users::UserErrors::UnknownFailure =>  Response::error("Failed to register user", 500),
-            users::UserErrors::InvalidPassword => Response::error("Failed to register user", 500)
-        },
-    }
-}
-
-pub async fn handle_login(mut req: Request, ctx: RouteContext<AppState>) -> Result<Response> {
-    let command: LoginCommand = req.json().await?;
-
-    match command.handle(&ctx.data.user_repository, &ctx.data.auth_service).await {
-        Ok(resp) => Response::from_json(&resp),
-        Err(e) => match e {
-            users::UserErrors::InvalidPassword => Response::error("Unauthorized", 401),
-            users::UserErrors::UnknownFailure => Response::error("Failed ", 500)
-        }
-    }
 }
 
 pub async fn handle_get_active_chats(
@@ -182,7 +144,11 @@ pub async fn handle_websocket_connect(
                 .body(ResponseBody::Empty));
         }
 
-        match &ctx.data.auth_service.verify_jwt_token(&password_header.unwrap().key) {
+        match &ctx
+            .data
+            .auth_service
+            .verify_jwt_token(&password_header.unwrap().key)
+        {
             Ok(claims) => {
                 let url = req.url()?;
                 let mut new_url = url.clone();
@@ -196,20 +162,28 @@ pub async fn handle_websocket_connect(
                 let res = stub.fetch_with_request(new_req).await.unwrap();
 
                 return Ok(res);
-            },
+            }
             Err(_) => return Response::error("Unauthorized", 401),
         };
     }
 
     Response::error("Bad Request", 400)
 }
+
 pub fn verify_jwt(req: &Request, auth_service: &AuthenticationService) -> Result<Claims> {
     tracing::info!("Verifying JWT");
-    let auth_header = req.headers().get("Authorization")?.ok_or(Error::RustError("No Authorization header".into()))?;
+    let auth_header = req
+        .headers()
+        .get("Authorization")?
+        .ok_or(Error::RustError("No Authorization header".into()))?;
 
-    let token = auth_header.strip_prefix("Bearer ").ok_or(Error::RustError("Invalid Authorization header".into()))?;
-    
-    let token = auth_service.verify_jwt_token(token).map_err(|_e| Error::RustError("Failure verifying token".to_string()))?;
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(Error::RustError("Invalid Authorization header".into()))?;
+
+    let token = auth_service
+        .verify_jwt_token(token)
+        .map_err(|_e| Error::RustError("Failure verifying token".to_string()))?;
 
     Ok(token)
 }
