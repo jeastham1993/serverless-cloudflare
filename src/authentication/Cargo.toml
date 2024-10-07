@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features=['time', 'json'] }
 time = { version = "0.3", features=['wasm-bindgen'] }
 worker = { version="0.4", features = ["http", "timezone", "d1", "tokio-postgres", "queue"] }
 tokio-postgres = { version="0.7", features=['js'], default-features=false }
-tokio-postgres-utils = "0.1"
+tokio-postgres-utils = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.116"
 console_error_panic_hook = { version = "0.1.1" }

@@ -1,0 +1,6 @@
+CREATE TABLE users (id SERIAL PRIMARY KEY,username TEXT NOT NULL UNIQUE,password_hash TEXT NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+
+CREATE INDEX idx_username ON users(username);
+
+ALTER TABLE users
+ADD COLUMN email_address TEXT NOT NULL UNIQUE

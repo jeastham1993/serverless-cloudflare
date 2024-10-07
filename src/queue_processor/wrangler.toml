@@ -10,5 +10,9 @@ mode = "smart"
 [build]
 command = "cargo install -q worker-build && worker-build --release" # required
 
+[[queues.producers]]
+queue = "user-notifications"
+binding = "USER_NOTIFICATIONS"
+
 [[queues.consumers]]
 queue = "user-notifications"
