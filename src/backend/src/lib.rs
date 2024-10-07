@@ -1,14 +1,13 @@
 use auth::{AuthenticationService, Claims};
 use chats::{Chat, ChatRepository, CreateChatCommand};
 use serde::Deserialize;
-use tracing::{info, warn};
+use tracing::warn;
 use tracing_subscriber::{
     fmt::{format::Pretty, time::UtcTime},
     prelude::*,
 };
 use tracing_web::{performance_layer, MakeConsoleWriter};
 use worker::*;
-use worker::postgres_tls::PassthroughTls;
 
 mod auth;
 mod chatroom;
@@ -48,10 +47,15 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         worker::Error::RustError("CHAT_METADATA binding not found".to_string())
     })?;
 
+    let cache_binding = env.kv("CHAT_CACHE").map_err(|e| {
+        warn!("{}", e);
+        worker::Error::RustError("CHAT_CACHE binding not found".to_string())
+    })?;
+
     let jwt_secret = env.secret("JWT_SECRET")?.to_string();
 
     Router::with_data(AppState {
-        chat_repository: ChatRepository::new(database_binding),
+        chat_repository: ChatRepository::new(database_binding, cache_binding),
         auth_service: AuthenticationService::new(jwt_secret)
         
     })

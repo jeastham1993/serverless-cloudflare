@@ -26,7 +26,7 @@ impl AuthenticationService {
         };
 
         let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(&self.jwt_secret.as_ref()))
-            .map_err(|e| ())?;
+            .map_err(|_e| ())?;
 
         Ok(token)
     }

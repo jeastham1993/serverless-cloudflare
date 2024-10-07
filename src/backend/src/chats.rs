@@ -1,23 +1,26 @@
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 use wasm_bindgen::JsValue;
-use worker::D1Database;
+use worker::{kv::KvStore, D1Database};
 
 #[derive(Deserialize)]
-pub struct CreateChatCommand{
-    pub name: String
+pub struct CreateChatCommand {
+    pub name: String,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct ChatDTO {
     pub id: String,
-    pub name: String
+    pub name: String,
 }
 
 impl ChatDTO {
-    fn from(chat: &Chat) ->  Self {
-        ChatDTO { id: chat.id.clone(), name: chat.name.clone() }
+    fn from(chat: &Chat) -> Self {
+        ChatDTO {
+            id: chat.id.clone(),
+            name: chat.name.clone(),
+        }
     }
 }
 
@@ -40,20 +43,25 @@ impl Chat {
 
 pub struct ChatRepository {
     database: D1Database,
+    cache: KvStore,
 }
 
 impl ChatRepository {
-    pub fn new(database: D1Database) -> Self {
-        ChatRepository { database }
+    pub fn new(database: D1Database, kv_store: KvStore) -> Self {
+        ChatRepository {
+            database,
+            cache: kv_store,
+        }
     }
 
-    pub async fn list_all_chats(&self, limit: usize) -> Vec<ChatDTO> {
+    async fn list_from_db(&self, limit: usize) -> Vec<ChatDTO> {
+        info!("Cache miss");
         let db_chats = &self
             .database
             .prepare(
                 "SELECT id, name, created_by
-        FROM chats c
-        LIMIT ?1",
+FROM chats c
+LIMIT ?1",
             )
             .bind(&[JsValue::from(limit)])
             .unwrap()
@@ -61,8 +69,49 @@ impl ChatRepository {
             .await;
 
         match db_chats {
-            Ok(d1_result) => d1_result.results::<Chat>().unwrap().iter().map(ChatDTO::from).collect(),
+            Ok(d1_result) => {
+                let db_result = d1_result
+                    .results::<Chat>()
+                    .unwrap()
+                    .iter()
+                    .map(ChatDTO::from)
+                    .collect();
+
+                let res = &self
+                    .cache
+                    .put("CHATS", &db_result)
+                    .unwrap()
+                    // TTL in workers must be at least 60 seconds
+                    .expiration_ttl(60)
+                    .execute()
+                    .await;
+
+                match res {
+                    Ok(_) => {}
+                    Err(e) => warn!("Failure writing to cache: {:?}", e),
+                }
+
+                db_result
+            }
             Err(_) => Vec::new(),
+        }
+    }
+
+    pub async fn list_all_chats(&self, limit: usize) -> Vec<ChatDTO> {
+        let cached_chats = &self.cache.get("CHATS").json::<Vec<ChatDTO>>().await;
+
+        match cached_chats {
+            Ok(cached) => {
+                info!("Cached chats found");
+                match cached {
+                    Some(value) => {
+                        info!("Cache hit");
+                        value.to_vec()
+                    }
+                    None => self.list_from_db(limit).await,
+                }
+            }
+            Err(_) => self.list_from_db(limit).await,
         }
     }
 
@@ -82,9 +131,7 @@ WHERE c.id = ?1",
         match db_chats {
             Ok(d1_result) => match d1_result {
                 None => Err(()),
-                Some(chat) => {
-                    Ok(ChatDTO::from(chat))
-                }
+                Some(chat) => Ok(ChatDTO::from(chat)),
             },
             Err(_) => Err(()),
         }
@@ -97,12 +144,12 @@ WHERE c.id = ?1",
                 "DELETE FROM chats
 WHERE id = ?1",
             )
-            .bind(&[
-                JsValue::from(chat_id),
-            ])
+            .bind(&[JsValue::from(chat_id)])
             .unwrap()
             .run()
             .await;
+
+        let _ = &self.cache.delete("CHATS").await;
 
         Ok(())
     }
@@ -120,7 +167,7 @@ WHERE id = ?1",
             .bind(&[
                 JsValue::from(chat.id),
                 JsValue::from(chat.name),
-                JsValue::from(chat.created_by)
+                JsValue::from(chat.created_by),
             ])
             .unwrap()
             .first::<Chat>(None)
@@ -130,6 +177,8 @@ WHERE id = ?1",
             Ok(res) => match res {
                 None => Err(()),
                 Some(chat) => {
+                    let _ = &self.cache.delete("CHATS").await;
+
                     let cloned_chat = chat.clone();
                     Ok(cloned_chat)
                 }
